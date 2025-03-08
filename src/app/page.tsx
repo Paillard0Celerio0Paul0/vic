@@ -9,19 +9,15 @@ export default function Home() {
   const [videoEnded, setVideoEnded] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const hiddenVideoRef = useRef<HTMLVideoElement>(null);
 
   // Gestionnaire pour vérifier le temps de la vidéo
   const handleTimeUpdate = () => {
     if (videoRef.current && videoRef.current.currentTime >= 58) {
-      // On garde la frame à 58 secondes
+      // On garde la frame à 58 secondes sur la vidéo visible
       videoRef.current.currentTime = 58;
-      // On ne met pas la vidéo en pause pour garder le son
+      videoRef.current.pause();
       setVideoEnded(true);
-
-      // On désactive la mise à jour du temps pour éviter les boucles
-      if (videoRef.current.ontimeupdate) {
-        videoRef.current.ontimeupdate = null;
-      }
     }
   };
 
@@ -30,28 +26,46 @@ export default function Home() {
     if (videoRef.current) {
       videoRef.current.volume = volume;
     }
+    if (hiddenVideoRef.current) {
+      hiddenVideoRef.current.volume = volume;
+    }
   };
 
   const handlePlay = () => {
     setIsPlaying(true);
     setVideoEnded(false);
     setIsPaused(false);
-    if (videoRef.current) {
+    if (videoRef.current && hiddenVideoRef.current) {
+      // On démarre les deux vidéos en même temps
       videoRef.current.play();
+      hiddenVideoRef.current.play();
+      // On met le son à 0 sur la vidéo principale pour éviter l'écho
+      videoRef.current.volume = 0;
+      hiddenVideoRef.current.volume = videoVolume;
     }
   };
 
   const handlePausePlay = () => {
-    if (videoRef.current) {
-      if (videoRef.current.paused) {
+    if (videoRef.current && hiddenVideoRef.current) {
+      if (videoRef.current.paused || hiddenVideoRef.current.paused) {
         videoRef.current.play();
+        hiddenVideoRef.current.play();
         setIsPaused(false);
       } else {
         videoRef.current.pause();
+        hiddenVideoRef.current.pause();
         setIsPaused(true);
       }
     }
   };
+
+  // Synchroniser les vidéos au chargement
+  useEffect(() => {
+    if (videoRef.current && hiddenVideoRef.current) {
+      videoRef.current.volume = 0; // La vidéo principale reste muette
+      hiddenVideoRef.current.volume = videoVolume;
+    }
+  }, [videoVolume]);
 
   const handleInteractiveButton = (buttonNumber: number) => {
     // Ici vous pourrez ajouter la logique pour charger différentes vidéos
@@ -76,6 +90,13 @@ export default function Home() {
             transition: 'opacity 0.5s ease-in-out'
           }}
         />
+        {/* Vidéo cachée pour continuer le son */}
+        <video
+          ref={hiddenVideoRef}
+          className="hidden"
+          src="https://res.cloudinary.com/dpqjlqwcq/video/upload/introduction"
+          playsInline
+        />
       </div>
 
       {/* Contenu interactif au premier plan */}
@@ -96,10 +117,10 @@ export default function Home() {
           </div>
         ) : (
           <div className="relative w-full h-screen">
-            {/* Interface de contrôle superposée - visible seulement pendant la lecture */}
-            {!videoEnded && (
-              <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start">
-                {/* Bouton Pause/Play */}
+            {/* Interface de contrôle superposée */}
+            <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start">
+              {/* Bouton Pause/Play - visible seulement pendant la lecture */}
+              {!videoEnded && (
                 <button
                   onClick={handlePausePlay}
                   className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 flex items-center gap-2 backdrop-blur-sm"
@@ -120,11 +141,11 @@ export default function Home() {
                     </>
                   )}
                 </button>
+              )}
 
-                {/* Contrôle du volume */}
-                <VolumeControl onVolumeChange={handleVolumeChange} />
-              </div>
-            )}
+              {/* Contrôle du volume - toujours visible */}
+              <VolumeControl onVolumeChange={handleVolumeChange} />
+            </div>
 
             {/* Boutons interactifs - visibles uniquement à la fin de la vidéo */}
             {videoEnded && (
