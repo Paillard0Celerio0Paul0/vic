@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import VolumeControl from '@/components/VolumeControl';
-import InteractiveZones from '@/components/InteractiveZones';
+import VolumeControl from '../components/VolumeControl';
+import InteractiveZones from '../components/InteractiveZones';
 
 export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
