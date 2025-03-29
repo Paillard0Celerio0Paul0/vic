@@ -323,7 +323,7 @@ export default function Home() {
             )}
 
             {/* Boutons latéraux pour les vidéos POV */}
-            {videoType === "POV" && (
+            {videoType === "POV" && currentVideo !== "introduction" && (
               <>
                 {/* Bouton gauche */}
                 <button
