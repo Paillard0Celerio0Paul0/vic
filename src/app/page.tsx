@@ -2,31 +2,135 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import VolumeControl from '@/components/VolumeControl';
+import InteractiveZones from '@/components/InteractiveZones';
 
 export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoVolume, setVideoVolume] = useState(1);
   const [videoEnded, setVideoEnded] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [currentVideo, setCurrentVideo] = useState<"introduction" | "choix1" | "choix2" | "choix3">("introduction");
+  const [currentVideo, setCurrentVideo] = useState<"introduction" | "POV_1" | "POV_2" | "POV_3" | 
+    "objet_velo" | "objet_boxe" | "objet_foot" |
+    "objet_cd" | "objet_mapmonde" | "objet_sablier" | "objet_plante" |
+    "objet_chien" | "objet_photo" | "objet_jeuxvideo">("introduction");
+  const [videoType, setVideoType] = useState<"introduction" | "lit" | "POV" | "transition" | "objet">("introduction");
+  const [nextPOV, setNextPOV] = useState<"POV_1" | "POV_2" | "POV_3" | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hiddenVideoRef = useRef<HTMLVideoElement>(null);
 
   // Timecodes d'arrêt pour chaque vidéo
   const videoEndTimes = {
     "introduction": 58,
-    "choix1": 25,
-    "choix2": 25,
-    "choix3": 25,
+    "POV_1": 25,
+    "POV_2": 25,
+    "POV_3": 25,
+    "objet_velo": 15,
+    "objet_boxe": 15,
+    "objet_foot": 15,
+    "objet_cd": 15,
+    "objet_mapmonde": 15,
+    "objet_sablier": 15,
+    "objet_plante": 15,
+    "objet_chien": 15,
+    "objet_photo": 15,
+    "objet_jeuxvideo": 15,
   } as const;
+
+  const handleTransition = (direction: "left" | "right") => {
+    let transitionVideo = "";
+    let nextVideo = "";
+    
+    // Déterminer la vidéo de transition et la vidéo POV suivante
+    if (currentVideo === "POV_1") {
+      transitionVideo = direction === "left" ? "1_vers_2" : "1_vers_3";
+      nextVideo = direction === "left" ? "POV_2" : "POV_3";
+    } else if (currentVideo === "POV_2") {
+      transitionVideo = direction === "left" ? "2_vers_1" : "2_vers_3";
+      nextVideo = direction === "left" ? "POV_1" : "POV_3";
+    } else if (currentVideo === "POV_3") {
+      transitionVideo = direction === "left" ? "3_vers_1" : "3_vers_2";
+      nextVideo = direction === "left" ? "POV_1" : "POV_2";
+    }
+
+    // Stocker la vidéo POV suivante
+    setNextPOV(nextVideo as "POV_1" | "POV_2" | "POV_3");
+
+    // Changer la vidéo visible
+    if (videoRef.current) {
+      videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${transitionVideo}`;
+      videoRef.current.volume = 0;
+      videoRef.current.load();
+    }
+    setVideoEnded(false);
+    setVideoType("transition");
+  };
+
+  // Gestionnaire pour les clics sur les zones interactives
+  const handleZoneClick = (zoneId: string) => {
+    const objetVideo = `objet_${zoneId}` as typeof currentVideo;
+    setCurrentVideo(objetVideo);
+    setVideoType("objet");
+    if (videoRef.current) {
+      videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${objetVideo}`;
+      videoRef.current.volume = 0;
+      videoRef.current.load();
+    }
+    setVideoEnded(false);
+  };
 
   // Gestionnaire pour vérifier le temps de la vidéo
   const handleTimeUpdate = () => {
-    if (videoRef.current && videoRef.current.currentTime >= videoEndTimes[currentVideo]) {
-      // On garde la frame à la fin sur la vidéo visible
-      videoRef.current.currentTime = videoEndTimes[currentVideo];
-      videoRef.current.pause();
-      setVideoEnded(true);
+    if (videoRef.current) {
+      // Si c'est la vidéo d'introduction, on vérifie le timecode d'arrêt
+      if (currentVideo === "introduction" && videoRef.current.currentTime >= videoEndTimes.introduction) {
+        videoRef.current.currentTime = videoEndTimes.introduction;
+        videoRef.current.pause();
+        setVideoEnded(true);
+      }
+      // Si c'est une vidéo POV, on vérifie le timecode d'arrêt
+      else if (videoType === "POV" && videoRef.current.currentTime >= videoEndTimes[currentVideo]) {
+        videoRef.current.currentTime = videoEndTimes[currentVideo];
+        videoRef.current.pause();
+        setVideoEnded(true);
+      }
+      // Si c'est une vidéo lit, on vérifie si elle est terminée
+      else if (videoType === "lit" && videoRef.current.ended) {
+        // Passer à la vidéo POV correspondante
+        const povNumber = currentVideo.split('_')[2];
+        const newVideo = `POV_${povNumber}` as "POV_1" | "POV_2" | "POV_3";
+        setCurrentVideo(newVideo);
+        setVideoType("POV");
+        if (videoRef.current) {
+          videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${newVideo}`;
+          videoRef.current.volume = 0;
+          videoRef.current.load();
+        }
+      }
+      // Si c'est une vidéo de transition (numero_vers_numero), on vérifie si elle est terminée
+      else if (videoType === "transition" && videoRef.current.ended && nextPOV) {
+        // Passer à la vidéo POV correspondante
+        setCurrentVideo(nextPOV);
+        setNextPOV(null);
+        setVideoType("POV");
+        if (videoRef.current) {
+          videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${nextPOV}`;
+          videoRef.current.volume = 0;
+          videoRef.current.load();
+        }
+      }
+      // Si c'est une vidéo objet, on vérifie si elle est terminée
+      else if (videoType === "objet" && videoRef.current.ended) {
+        // Retourner à la vidéo POV précédente
+        const povNumber = currentVideo.split('_')[1];
+        const povVideo = `POV_${povNumber}` as "POV_1" | "POV_2" | "POV_3";
+        setCurrentVideo(povVideo);
+        setVideoType("POV");
+        if (videoRef.current) {
+          videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${povVideo}`;
+          videoRef.current.volume = 0;
+          videoRef.current.load();
+        }
+      }
     }
   };
 
@@ -65,12 +169,12 @@ export default function Home() {
 
   const handleInteractiveButton = (buttonNumber: number) => {
     // Changer la vidéo visible tout en gardant la musique de fond
-    const newVideo = `choix${buttonNumber}` as "choix1" | "choix2" | "choix3";
-    setCurrentVideo(newVideo);
+    const litVideo = `lit_vers_${buttonNumber}`;
+    setVideoType("lit");
+    setCurrentVideo(litVideo as any); // Mise à jour temporaire pour le type
     if (videoRef.current) {
-      videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${newVideo}`;
-      videoRef.current.volume = 0; // Garder la vidéo muette
-      // Attendre que la vidéo soit chargée avant de la jouer
+      videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${litVideo}`;
+      videoRef.current.volume = 0;
       videoRef.current.load();
     }
     setVideoEnded(false);
@@ -191,21 +295,68 @@ export default function Home() {
               <VolumeControl onVolumeChange={handleVolumeChange} />
             </div>
 
-            {/* Boutons interactifs - visibles uniquement à la fin de la vidéo */}
-            {videoEnded && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center translate-y-16">
-                <div className="flex gap-6">
-                  {[1, 2, 3].map((number) => (
-                    <button
-                      key={number}
-                      onClick={() => handleInteractiveButton(number)}
-                      className="bg-black bg-opacity-30 hover:bg-opacity-50 text-white text-xl px-8 py-4 rounded-lg transition-all transform hover:scale-110 hover:bg-blue-500 border-2 border-white"
-                    >
-                      Option {number}
-                    </button>
-                  ))}
-                </div>
+            {/* Boutons d'options - visibles uniquement à la fin de la vidéo d'introduction */}
+            {videoEnded && currentVideo === "introduction" && (
+              <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 flex flex-row gap-4">
+                <button
+                  onClick={() => handleInteractiveButton(1)}
+                  className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex flex-col items-center justify-center gap-2"
+                >
+                  <span className="text-4xl">🚪</span>
+                  <span className="text-lg">1</span>
+                </button>
+                <button
+                  onClick={() => handleInteractiveButton(2)}
+                  className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex flex-col items-center justify-center gap-2"
+                >
+                  <span className="text-4xl">💼</span>
+                  <span className="text-lg">2</span>
+                </button>
+                <button
+                  onClick={() => handleInteractiveButton(3)}
+                  className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex flex-col items-center justify-center gap-2"
+                >
+                  <span className="text-4xl">🗄️</span>
+                  <span className="text-lg">3</span>
+                </button>
               </div>
+            )}
+
+            {/* Boutons latéraux pour les vidéos POV */}
+            {videoType === "POV" && (
+              <>
+                {/* Bouton gauche */}
+                <button
+                  onClick={() => handleTransition("left")}
+                  className="absolute left-8 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex items-center justify-center"
+                >
+                  <span className="text-4xl">
+                    {currentVideo === "POV_1" ? "💼" : 
+                     currentVideo === "POV_2" ? "🚪" : 
+                     "🚪"}
+                  </span>
+                </button>
+
+                {/* Bouton droit */}
+                <button
+                  onClick={() => handleTransition("right")}
+                  className="absolute right-8 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex items-center justify-center"
+                >
+                  <span className="text-4xl">
+                    {currentVideo === "POV_1" ? "🗄️" : 
+                     currentVideo === "POV_2" ? "🗄️" : 
+                     "💼"}
+                  </span>
+                </button>
+              </>
+            )}
+
+            {/* Ajouter les zones interactives pour les vidéos POV */}
+            {videoType === "POV" && (
+              <InteractiveZones
+                currentVideo={currentVideo}
+                onZoneClick={handleZoneClick}
+              />
             )}
           </div>
         )}
