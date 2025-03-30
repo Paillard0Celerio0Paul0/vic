@@ -70,9 +70,9 @@ const InteractiveZones: React.FC<InteractiveZonesProps> = ({ currentVideo, onZon
             height: `${zone.height}%`,
             cursor: `url("${process.env.NEXT_PUBLIC_BASE_URL || ''}/cursor.png") 0 0, pointer`,
             pointerEvents: 'auto',
-            opacity: 0.3,
-            backgroundColor: zone.color || 'transparent',
-            border: '2px solid white',
+            opacity: 0,
+            backgroundColor: 'transparent',
+            border: 'none',
             transition: 'transform 0.2s ease',
           }}
           onMouseEnter={(e) => {
