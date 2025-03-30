@@ -10,13 +10,15 @@ export default function Home() {
   const [videoEnded, setVideoEnded] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentVideo, setCurrentVideo] = useState<"introduction" | "POV_1" | "POV_2" | "POV_3" | 
-    "objet_velo" | "objet_boxe" | "objet_foot" |
-    "objet_cd" | "objet_mapmonde" | "objet_sablier" | "objet_plante" |
-    "objet_chien" | "objet_photo" | "objet_jeuxvideo">("introduction");
+    "objet_vélo" | "objet_boxe" | "objet_foot" |
+    "objet_mapmonde" | "objet_sablier" | "objet_plante" | "objet_cd" |
+    "objet_chien" | "objet_jeuxvideo" | "objet_photo">("introduction");
   const [videoType, setVideoType] = useState<"introduction" | "lit" | "POV" | "transition" | "objet">("introduction");
   const [nextPOV, setNextPOV] = useState<"POV_1" | "POV_2" | "POV_3" | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const hiddenVideoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [mainSongTime, setMainSongTime] = useState(0);
+  const [isFading, setIsFading] = useState(false);
 
   // Timecodes d'arrêt pour chaque vidéo
   const videoEndTimes = {
@@ -24,17 +26,39 @@ export default function Home() {
     "POV_1": 25,
     "POV_2": 25,
     "POV_3": 25,
-    "objet_velo": 15,
-    "objet_boxe": 15,
-    "objet_foot": 15,
-    "objet_cd": 15,
-    "objet_mapmonde": 15,
-    "objet_sablier": 15,
-    "objet_plante": 15,
-    "objet_chien": 15,
-    "objet_photo": 15,
-    "objet_jeuxvideo": 15,
+    "objet_vélo": 13,
+    "objet_boxe": 29,
+    "objet_foot": 31,
+    "objet_mapmonde": 31,
+    "objet_sablier": 28,
+    "objet_plante": 31,
+    "objet_cd": 21,
+    "objet_chien": 13,
+    "objet_jeuxvideo": 17,
+    "objet_photo": 33,
   } as const;
+
+  // Liste des objets qui ont une musique associée
+  const objectsWithMusic = ["boxe", "foot", "chien", "jeuxvideo"];
+
+  // Fonction pour créer un fondu
+  const fadeAudio = (audio: HTMLAudioElement, targetVolume: number, duration: number = 1000) => {
+    const startVolume = audio.volume;
+    const startTime = Date.now();
+
+    const fade = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      audio.volume = startVolume + (targetVolume - startVolume) * progress;
+
+      if (progress < 1) {
+        requestAnimationFrame(fade);
+      }
+    };
+
+    fade();
+  };
 
   const handleTransition = (direction: "left" | "right") => {
     let transitionVideo = "";
@@ -67,14 +91,45 @@ export default function Home() {
 
   // Gestionnaire pour les clics sur les zones interactives
   const handleZoneClick = (zoneId: string) => {
-    const objetVideo = `objet_${zoneId}` as typeof currentVideo;
+    const objetVideo = `${zoneId}` as typeof currentVideo;
     setCurrentVideo(objetVideo);
     setVideoType("objet");
+    
+    // Sauvegarder le temps actuel de la musique principale
+    if (audioRef.current) {
+      setMainSongTime(audioRef.current.currentTime);
+    }
+
     if (videoRef.current) {
       videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${objetVideo}`;
       videoRef.current.volume = 0;
       videoRef.current.load();
     }
+
+    // Gérer la musique
+    if (audioRef.current) {
+      const objetType = zoneId;
+      if (objectsWithMusic.includes(objetType)) {
+        // Si l'objet a une musique associée, on fait un fondu
+        setIsFading(true);
+        fadeAudio(audioRef.current, 0, 500); // Fade out sur 500ms
+
+        // Après le fade out, on change la source et on fait un fade in
+        setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${objetType}_song`;
+            audioRef.current.volume = 0;
+            audioRef.current.play();
+            fadeAudio(audioRef.current, videoVolume, 500); // Fade in sur 500ms
+            setIsFading(false);
+          }
+        }, 500);
+      } else {
+        // Si l'objet n'a pas de musique associée, on continue la musique principale
+        audioRef.current.volume = videoVolume;
+      }
+    }
+
     setVideoEnded(false);
   };
 
@@ -85,6 +140,11 @@ export default function Home() {
       if (currentVideo === "introduction" && videoRef.current.currentTime >= videoEndTimes.introduction) {
         videoRef.current.currentTime = videoEndTimes.introduction;
         videoRef.current.pause();
+        videoRef.current.volume = 0;
+        if (audioRef.current) {
+          audioRef.current.play();
+          audioRef.current.volume = videoVolume;
+        }
         setVideoEnded(true);
       }
       // Si c'est une vidéo POV, on vérifie le timecode d'arrêt
@@ -120,24 +180,21 @@ export default function Home() {
       }
       // Si c'est une vidéo objet, on vérifie si elle est terminée
       else if (videoType === "objet" && videoRef.current.ended) {
-        // Retourner à la vidéo POV précédente
-        const povNumber = currentVideo.split('_')[1];
-        const povVideo = `POV_${povNumber}` as "POV_1" | "POV_2" | "POV_3";
-        setCurrentVideo(povVideo);
-        setVideoType("POV");
-        if (videoRef.current) {
-          videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${povVideo}`;
-          videoRef.current.volume = 0;
-          videoRef.current.load();
-        }
+        // On ne fait rien, on attend le clic sur le bouton retour
+        videoRef.current.pause();
+        setVideoEnded(true);
       }
     }
   };
 
   const handleVolumeChange = (volume: number) => {
     setVideoVolume(volume);
-    if (hiddenVideoRef.current) {
-      hiddenVideoRef.current.volume = volume;
+    if (videoRef.current && audioRef.current) {
+      if (currentVideo === "introduction") {
+        videoRef.current.volume = volume;
+      } else {
+        fadeAudio(audioRef.current, volume, 300); // Fade plus court pour le contrôle du volume
+      }
     }
   };
 
@@ -145,23 +202,33 @@ export default function Home() {
     setIsPlaying(true);
     setVideoEnded(false);
     setIsPaused(false);
-    if (videoRef.current && hiddenVideoRef.current) {
+    if (videoRef.current && audioRef.current) {
       videoRef.current.play();
-      hiddenVideoRef.current.play();
-      videoRef.current.volume = 0;
-      hiddenVideoRef.current.volume = videoVolume;
+      // Si c'est la vidéo d'introduction, on active son audio
+      if (currentVideo === "introduction") {
+        videoRef.current.volume = videoVolume;
+        audioRef.current.pause();
+      } else {
+        videoRef.current.volume = 0;
+        audioRef.current.play();
+        audioRef.current.volume = videoVolume;
+      }
     }
   };
 
   const handlePausePlay = () => {
-    if (videoRef.current && hiddenVideoRef.current) {
-      if (videoRef.current.paused || hiddenVideoRef.current.paused) {
+    if (videoRef.current && audioRef.current) {
+      if (videoRef.current.paused) {
         videoRef.current.play();
-        hiddenVideoRef.current.play();
+        if (currentVideo === "introduction") {
+          audioRef.current.pause();
+        } else {
+          audioRef.current.play();
+        }
         setIsPaused(false);
       } else {
         videoRef.current.pause();
-        hiddenVideoRef.current.pause();
+        audioRef.current.pause();
         setIsPaused(true);
       }
     }
@@ -182,28 +249,129 @@ export default function Home() {
 
   // Gestionnaire pour démarrer la vidéo une fois chargée
   const handleVideoLoaded = () => {
-    if (videoRef.current && !videoEnded) {
+    if (videoRef.current && !videoEnded && currentVideo !== "introduction") {
       videoRef.current.play();
     }
   };
 
   const handleReturn = () => {
+    // D'abord, on arrête la vidéo actuelle
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+
+    // Ensuite, on met à jour les états
+    setVideoEnded(true);
+    setIsPlaying(true);
+    setIsPaused(false);
+    setVideoType("introduction");
     setCurrentVideo("introduction");
+
+    // Enfin, on charge la vidéo d'introduction
     if (videoRef.current) {
       videoRef.current.src = "https://res.cloudinary.com/dpqjlqwcq/video/upload/introduction";
       videoRef.current.currentTime = videoEndTimes.introduction;
       videoRef.current.volume = 0;
+      videoRef.current.pause();
     }
-    setVideoEnded(true);
   };
+
+  // Gestionnaire pour retourner à la vidéo POV
+  const handleReturnToPOV = () => {
+    // Déterminer le POV en fonction de la vidéo d'objet
+    let povVideo: "POV_1" | "POV_2" | "POV_3";
+   
+    // Extraire le type d'objet en enlevant le préfixe "objet_"
+    const objetType = currentVideo;
+    // POV_1 pour vélo, boxe et foot
+    if (["vélo", "boxe", "foot"].includes(objetType)) {
+      povVideo = "POV_1";
+    }
+    // POV_2 pour mapmonde, cd, plante et sablier
+    else if (["mapmonde", "cd", "plante", "sablier"].includes(objetType)) {
+      povVideo = "POV_2";
+    }
+    // POV_3 pour chien, photo et jeuxvideo
+    else if (["chien", "photo", "jeuxvideo"].includes(objetType)) {
+      povVideo = "POV_3";
+    } else {
+      return; // Si l'objet n'est pas reconnu, on ne fait rien
+    }
+
+    setCurrentVideo(povVideo);
+    setVideoType("POV");
+    
+    // Reprendre la musique principale avec un fondu
+    if (audioRef.current) {
+      setIsFading(true);
+      fadeAudio(audioRef.current, 0, 500); // Fade out sur 500ms
+
+      setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.src = "https://res.cloudinary.com/dpqjlqwcq/video/upload/main_song";
+          audioRef.current.currentTime = mainSongTime;
+          audioRef.current.volume = 0;
+          audioRef.current.play();
+          fadeAudio(audioRef.current, videoVolume, 500); // Fade in sur 500ms
+          setIsFading(false);
+        }
+      }, 500);
+    }
+
+    if (videoRef.current) {
+      // D'abord, on arrête la vidéo actuelle
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+      
+      // Ensuite, on change la source
+      videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${povVideo}`;
+      videoRef.current.volume = 0;
+      
+      // On attend que la vidéo soit chargée avant de la lancer
+      videoRef.current.onloadeddata = () => {
+        if (videoRef.current) {
+          videoRef.current.currentTime = 0;
+          videoRef.current.play();
+          setVideoEnded(false);
+          setIsPaused(false);
+          setIsPlaying(true);
+        }
+      };
+    }
+  };
+
+  // Gestionnaire pour la fin de la musique principale
+  useEffect(() => {
+    if (audioRef.current) {
+      const handleAudioEnded = () => {
+        if (audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play();
+        }
+      };
+
+      audioRef.current.addEventListener('ended', handleAudioEnded);
+      return () => {
+        if (audioRef.current) {
+          audioRef.current.removeEventListener('ended', handleAudioEnded);
+        }
+      };
+    }
+  }, []);
 
   // Synchroniser les vidéos au chargement
   useEffect(() => {
-    if (videoRef.current && hiddenVideoRef.current) {
-      videoRef.current.volume = 0; // La vidéo principale reste muette
-      hiddenVideoRef.current.volume = videoVolume;
+    if (videoRef.current && audioRef.current) {
+      if (currentVideo === "introduction") {
+        videoRef.current.volume = videoVolume;
+        audioRef.current.pause();
+      } else {
+        videoRef.current.volume = 0;
+        audioRef.current.volume = videoVolume;
+      }
     }
-  }, [videoVolume]);
+  }, [videoVolume, currentVideo]);
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
@@ -224,19 +392,17 @@ export default function Home() {
             transition: 'opacity 0.5s ease-in-out'
           }}
         />
-        {/* Vidéo cachée pour le son de fond */}
-        <video
-          ref={hiddenVideoRef}
-          className="hidden"
-          src="https://res.cloudinary.com/dpqjlqwcq/video/upload/introduction"
-          playsInline
+        {/* Audio pour la musique de fond */}
+        <audio
+          ref={audioRef}
+          src="https://res.cloudinary.com/dpqjlqwcq/video/upload/main_song"
           loop
         />
       </div>
 
       {/* Contenu interactif au premier plan */}
       <div className="relative w-full min-h-screen" style={{ zIndex: 10 }}>
-        {!isPlaying ? (
+        {!isPlaying && currentVideo === "introduction" ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black">
             <div className="text-center">
               <h1 className="text-4xl font-bold text-white mb-8">
@@ -254,8 +420,8 @@ export default function Home() {
           <div className="relative w-full h-screen">
             {/* Interface de contrôle superposée */}
             <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start">
-              {/* Bouton Retour - visible seulement pendant les vidéos de choix */}
-              {currentVideo !== "introduction" && (
+              {/* Bouton Retour - visible uniquement pendant les vidéos POV */}
+              {/* {videoType === "POV" && (
                 <button
                   onClick={handleReturn}
                   className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 flex items-center gap-2 backdrop-blur-sm mr-4"
@@ -265,10 +431,10 @@ export default function Home() {
                   </svg>
                   Retour
                 </button>
-              )}
+              )} */}
 
-              {/* Bouton Pause/Play - visible seulement pendant la lecture */}
-              {!videoEnded && (
+              {/* Bouton Pause/Play - visible seulement pendant la vidéo d'introduction */}
+              {!videoEnded && currentVideo === "introduction" && (
                 <button
                   onClick={handlePausePlay}
                   className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 flex items-center gap-2 backdrop-blur-sm"
@@ -357,6 +523,19 @@ export default function Home() {
                 currentVideo={currentVideo}
                 onZoneClick={handleZoneClick}
               />
+            )}
+
+            {/* Bouton Continuer - visible uniquement à la fin des vidéos d'objets */}
+            {videoType === "objet" && videoEnded && (
+              <button
+                onClick={handleReturnToPOV}
+                className="absolute bottom-8 right-8 bg-black bg-opacity-50 hover:bg-opacity-75 text-white px-6 py-3 rounded-lg transition-all transform hover:scale-105 flex items-center gap-2 backdrop-blur-sm"
+              >
+                <span className="text-lg">Continuer</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
             )}
           </div>
         )}

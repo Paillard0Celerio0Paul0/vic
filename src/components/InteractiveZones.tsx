@@ -18,7 +18,7 @@ interface InteractiveZonesProps {
 // Définition des zones cliquables pour chaque vidéo POV (en pourcentages)
 const zonesByVideo: Record<string, Zone[]> = {
   "POV_1": [
-    { id: "velo", x: 33, y: 50, width: 42, height: 36, color: 'rgba(255, 0, 0, 0.3)' },
+    { id: "vélo", x: 33, y: 50, width: 42, height: 36, color: 'rgba(255, 0, 0, 0.3)' },
     { id: "boxe", x: 36, y: 18, width: 8, height: 25, color: 'rgba(0, 255, 0, 0.3)' },
     { id: "foot", x: 55, y: 86, width: 7, height: 13, color: 'rgba(0, 0, 255, 0.3)' },
   ],
