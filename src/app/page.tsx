@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import VolumeControl from '../components/VolumeControl';
 import InteractiveZones from '../components/InteractiveZones';
+import VideoPreloader from '../components/VideoPreloader';
 
 export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -19,6 +20,13 @@ export default function Home() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [mainSongTime, setMainSongTime] = useState(0);
   const [isFading, setIsFading] = useState(false);
+  const [showLogo, setShowLogo] = useState(false);
+  const [logoOpacity, setLogoOpacity] = useState(1);
+
+  // Fonction pour obtenir l'URL optimisée avec transformations Cloudinary
+  const getOptimizedVideoUrl = (videoId: string) => {
+    return `https://res.cloudinary.com/dpqjlqwcq/video/upload/q_auto,f_auto,w_1920/${videoId}`;
+  };
 
   // Timecodes d'arrêt pour chaque vidéo
   const videoEndTimes = {
@@ -81,7 +89,7 @@ export default function Home() {
 
     // Changer la vidéo visible
     if (videoRef.current) {
-      videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${transitionVideo}`;
+      videoRef.current.src = getOptimizedVideoUrl(transitionVideo);
       videoRef.current.volume = 0;
       videoRef.current.load();
     }
@@ -101,7 +109,7 @@ export default function Home() {
     }
 
     if (videoRef.current) {
-      videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${objetVideo}`;
+      videoRef.current.src = getOptimizedVideoUrl(objetVideo);
       videoRef.current.volume = 0;
       videoRef.current.load();
     }
@@ -117,7 +125,7 @@ export default function Home() {
         // Après le fade out, on change la source et on fait un fade in
         setTimeout(() => {
           if (audioRef.current) {
-            audioRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${objetType}_song`;
+            audioRef.current.src = getOptimizedVideoUrl(`${objetType}_song`);
             audioRef.current.volume = 0;
             audioRef.current.play();
             fadeAudio(audioRef.current, videoVolume, 500); // Fade in sur 500ms
@@ -161,7 +169,7 @@ export default function Home() {
         setCurrentVideo(newVideo);
         setVideoType("POV");
         if (videoRef.current) {
-          videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${newVideo}`;
+          videoRef.current.src = getOptimizedVideoUrl(newVideo);
           videoRef.current.volume = 0;
           videoRef.current.load();
         }
@@ -173,7 +181,7 @@ export default function Home() {
         setNextPOV(null);
         setVideoType("POV");
         if (videoRef.current) {
-          videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${nextPOV}`;
+          videoRef.current.src = getOptimizedVideoUrl(nextPOV);
           videoRef.current.volume = 0;
           videoRef.current.load();
         }
@@ -202,6 +210,28 @@ export default function Home() {
     setIsPlaying(true);
     setVideoEnded(false);
     setIsPaused(false);
+    setShowLogo(true);
+    setLogoOpacity(1);
+
+    // Faire disparaître progressivement le logo et le fond avec une transition plus douce
+    const startTime = Date.now();
+    const fadeOut = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / 10000, 1); // Augmentation à 10 secondes
+      // Utilisation d'une courbe d'accélération plus douce
+      const easedProgress = 1 - Math.pow(1 - progress, 4); // Courbe d'accélération quartique
+      setLogoOpacity(1 - easedProgress);
+
+      if (progress < 1) {
+        requestAnimationFrame(fadeOut);
+      } else {
+        setShowLogo(false);
+      }
+    };
+
+    fadeOut();
+
+    // Démarrer la vidéo et l'audio
     if (videoRef.current && audioRef.current) {
       videoRef.current.play();
       // Si c'est la vidéo d'introduction, on active son audio
@@ -240,7 +270,7 @@ export default function Home() {
     setVideoType("lit");
     setCurrentVideo(litVideo as any); // Mise à jour temporaire pour le type
     if (videoRef.current) {
-      videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${litVideo}`;
+      videoRef.current.src = getOptimizedVideoUrl(litVideo);
       videoRef.current.volume = 0;
       videoRef.current.load();
     }
@@ -270,7 +300,7 @@ export default function Home() {
 
     // Enfin, on charge la vidéo d'introduction
     if (videoRef.current) {
-      videoRef.current.src = "https://res.cloudinary.com/dpqjlqwcq/video/upload/introduction";
+      videoRef.current.src = getOptimizedVideoUrl("introduction");
       videoRef.current.currentTime = videoEndTimes.introduction;
       videoRef.current.volume = 0;
       videoRef.current.pause();
@@ -309,7 +339,7 @@ export default function Home() {
 
       setTimeout(() => {
         if (audioRef.current) {
-          audioRef.current.src = "https://res.cloudinary.com/dpqjlqwcq/video/upload/main_song";
+          audioRef.current.src = getOptimizedVideoUrl("main_song");
           audioRef.current.currentTime = mainSongTime;
           audioRef.current.volume = 0;
           audioRef.current.play();
@@ -325,7 +355,7 @@ export default function Home() {
       videoRef.current.currentTime = 0;
       
       // Ensuite, on change la source
-      videoRef.current.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/${povVideo}`;
+      videoRef.current.src = getOptimizedVideoUrl(povVideo);
       videoRef.current.volume = 0;
       
       // On attend que la vidéo soit chargée avant de la lancer
@@ -375,12 +405,15 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
+      {/* Préchargeur de vidéos */}
+      <VideoPreloader currentVideo={currentVideo} videoType={videoType} />
+      
       {/* Vidéo en arrière-plan absolu */}
       <div className="absolute inset-0 w-full h-full overflow-hidden" style={{ zIndex: 0 }}>
         <video
           ref={videoRef}
           className="w-full h-full object-cover pointer-events-none"
-          src={`https://res.cloudinary.com/dpqjlqwcq/video/upload/${currentVideo}`}
+          src={getOptimizedVideoUrl(currentVideo)}
           playsInline
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
@@ -395,7 +428,7 @@ export default function Home() {
         {/* Audio pour la musique de fond */}
         <audio
           ref={audioRef}
-          src="https://res.cloudinary.com/dpqjlqwcq/video/upload/main_song"
+          src={getOptimizedVideoUrl("main_song")}
           loop
         />
       </div>
@@ -405,9 +438,6 @@ export default function Home() {
         {!isPlaying && currentVideo === "introduction" ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black">
             <div className="text-center">
-              <h1 className="text-4xl font-bold text-white mb-8">
-                Orchestre Interactif
-              </h1>
               <button
                 onClick={handlePlay}
                 className="bg-blue-500 hover:bg-blue-600 text-white text-xl px-8 py-4 rounded-lg transition-colors transform hover:scale-105"
@@ -417,23 +447,34 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <div className="relative w-full h-screen">
+          <>
+            {/* Superposition du logo */}
+            {showLogo && (
+              <div 
+                className="absolute inset-0 flex items-center justify-center transition-all duration-1000 ease-in-out"
+                style={{ 
+                  opacity: logoOpacity, 
+                  zIndex: 20,
+                  background: `rgba(0, 0, 0, ${logoOpacity})`,
+                  transition: 'background 1s ease-in-out, opacity 1s ease-in-out'
+                }}
+              >
+                <img 
+                  src="/locg_logo.png" 
+                  alt="Logo" 
+                  className="max-w-[80%] max-h-[80%] object-contain transition-all duration-1000 ease-in-out"
+                  style={{
+                    opacity: logoOpacity,
+                    transform: `scale(${0.8 + (logoOpacity * 0.2)})`,
+                    transition: 'opacity 1s ease-in-out, transform 1s ease-in-out'
+                  }}
+                />
+              </div>
+            )}
+            
             {/* Interface de contrôle superposée */}
             <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start">
-              {/* Bouton Retour - visible uniquement pendant les vidéos POV */}
-              {/* {videoType === "POV" && (
-                <button
-                  onClick={handleReturn}
-                  className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 flex items-center gap-2 backdrop-blur-sm mr-4"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                  </svg>
-                  Retour
-                </button>
-              )} */}
-
-              {/* Bouton Pause/Play - visible seulement pendant la vidéo d'introduction */}
+             
               {!videoEnded && currentVideo === "introduction" && (
                 <button
                   onClick={handlePausePlay}
@@ -468,21 +509,21 @@ export default function Home() {
                   onClick={() => handleInteractiveButton(1)}
                   className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex flex-col items-center justify-center gap-2"
                 >
-                  <span className="text-4xl">🚪</span>
+                  <img src="/icons/boxgloves.svg" alt="Boxing Gloves" className="w-12 h-12 invert brightness-0" />
                   <span className="text-lg">1</span>
                 </button>
                 <button
                   onClick={() => handleInteractiveButton(2)}
                   className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex flex-col items-center justify-center gap-2"
                 >
-                  <span className="text-4xl">💼</span>
+                  <img src="/icons/desk.svg" alt="Desk" className="w-12 h-12 invert brightness-0" />
                   <span className="text-lg">2</span>
                 </button>
                 <button
                   onClick={() => handleInteractiveButton(3)}
                   className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex flex-col items-center justify-center gap-2"
                 >
-                  <span className="text-4xl">🗄️</span>
+                  <img src="/icons/armoire.svg" alt="Wardrobe" className="w-12 h-12 invert brightness-0" />
                   <span className="text-lg">3</span>
                 </button>
               </div>
@@ -496,11 +537,13 @@ export default function Home() {
                   onClick={() => handleTransition("left")}
                   className="absolute left-8 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex items-center justify-center"
                 >
-                  <span className="text-4xl">
-                    {currentVideo === "POV_1" ? "💼" : 
-                     currentVideo === "POV_2" ? "🚪" : 
-                     "🚪"}
-                  </span>
+                  <img 
+                    src={`/icons/${currentVideo === "POV_1" ? "desk" : 
+                          currentVideo === "POV_2" ? "boxgloves" : 
+                          "boxgloves"}.svg`} 
+                    alt="Left transition" 
+                    className="w-12 h-12 invert brightness-0" 
+                  />
                 </button>
 
                 {/* Bouton droit */}
@@ -508,11 +551,13 @@ export default function Home() {
                   onClick={() => handleTransition("right")}
                   className="absolute right-8 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex items-center justify-center"
                 >
-                  <span className="text-4xl">
-                    {currentVideo === "POV_1" ? "🗄️" : 
-                     currentVideo === "POV_2" ? "🗄️" : 
-                     "💼"}
-                  </span>
+                  <img 
+                    src={`/icons/${currentVideo === "POV_1" ? "armoire" : 
+                          currentVideo === "POV_2" ? "armoire" : 
+                          "desk"}.svg`} 
+                    alt="Right transition" 
+                    className="w-12 h-12 invert brightness-0" 
+                  />
                 </button>
               </>
             )}
@@ -537,7 +582,7 @@ export default function Home() {
                 </svg>
               </button>
             )}
-          </div>
+          </>
         )}
       </div>
     </div>
