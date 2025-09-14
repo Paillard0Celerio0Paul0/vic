@@ -19,6 +19,8 @@ export default function Home() {
   const [isFading, setIsFading] = useState(false);
   const [loadingText, setLoadingText] = useState("");
   const [isLoadingComplete, setIsLoadingComplete] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [nextVideoSrc, setNextVideoSrc] = useState<string | null>(null);
   const [explanatoryVideo, setExplanatoryVideo] = useState<string | null>(null);
   const [showExplanatoryVideo, setShowExplanatoryVideo] = useState(false);
   const explanatoryVideoRef = useRef<HTMLVideoElement>(null);
@@ -67,38 +69,58 @@ export default function Home() {
       audioRef.current.currentTime = 0; // Remettre à zéro pour éviter les conflits
     }
     
-    if (videoRef.current) {
-      videoRef.current.src = getOptimizedVideoUrl("outro");
-      videoRef.current.volume = 1.0; // Volume maximum pour la vidéo finale
-      videoRef.current.muted = false; // S'assurer que le son n'est pas coupé
-      videoRef.current.load();
-      videoRef.current.onloadeddata = () => {
-        if (videoRef.current) {
-          videoRef.current.play()
-            .then(() => {
-              // Masquer le score quelques secondes après le démarrage de l'outro
-              setTimeout(() => {
-                setShowScore(false);
-              }, 3000); // 3 secondes après le démarrage
-              
-              // Après 6 secondes, lancer outro_song en parallèle
-              setTimeout(() => {
-                if (audioRef.current) {
-                  audioRef.current.src = getOptimizedVideoUrl("outro_song");
-                  audioRef.current.volume = videoVolume;
-                  audioRef.current.loop = false; // Ne pas boucler la musique outro
-                  audioRef.current.play();
+    // Précharger la vidéo outro pour éviter les flashes
+    setIsTransitioning(true);
+    const outroUrl = getOptimizedVideoUrl("outro");
+    setNextVideoSrc(outroUrl);
+
+    // Créer un élément vidéo temporaire pour précharger
+    const preloadVideo = document.createElement('video');
+    preloadVideo.src = outroUrl;
+    preloadVideo.preload = 'auto';
+    preloadVideo.load();
+
+    preloadVideo.addEventListener('canplaythrough', () => {
+      // Une fois préchargée, faire la transition
+      if (videoRef.current) {
+        videoRef.current.src = outroUrl;
+        videoRef.current.volume = 1.0; // Volume maximum pour la vidéo finale
+        videoRef.current.muted = false; // S'assurer que le son n'est pas coupé
+        videoRef.current.load();
+        videoRef.current.onloadeddata = () => {
+          if (videoRef.current) {
+            videoRef.current.play()
+              .then(() => {
+                setIsTransitioning(false);
+                setNextVideoSrc(null);
+                
+                // Masquer le score quelques secondes après le démarrage de l'outro
+                setTimeout(() => {
+                  setShowScore(false);
+                }, 3000); // 3 secondes après le démarrage
+                
+                // Après 6 secondes, lancer outro_song en parallèle
+                setTimeout(() => {
+                  if (audioRef.current) {
+                    audioRef.current.src = getOptimizedVideoUrl("outro_song");
+                    audioRef.current.volume = videoVolume;
+                    audioRef.current.loop = false; // Ne pas boucler la musique outro
+                    audioRef.current.play();
+                  }
+                }, 6000); // 6 secondes après le démarrage de outro
+              })
+              .catch((error) => {
+                if (error.name === 'AbortError') {
+                  return;
                 }
-              }, 6000); // 6 secondes après le démarrage de outro
-            })
-            .catch((error) => {
-              if (error.name === 'AbortError') {
-                return;
-              }
-            });
-        }
-      };
-    }
+                setIsTransitioning(false);
+                setNextVideoSrc(null);
+              });
+          }
+        };
+      }
+    });
+    
     setOutroPlayed(true);
     setVideoEnded(false);
   };
@@ -201,26 +223,44 @@ export default function Home() {
     // Stocker la vidéo POV suivante
     setNextPOV(nextVideo as "POV_1" | "POV_2" | "POV_3");
 
-    // Changer la vidéo visible et la lancer
-    if (videoRef.current) {
-      videoRef.current.src = getOptimizedVideoUrl(transitionVideo);
-      videoRef.current.volume = 0;
-      videoRef.current.load();
-      
-      // Attendre que la vidéo soit chargée puis la lancer
-      videoRef.current.onloadeddata = () => {
-        if (videoRef.current) {
-          videoRef.current.play()
-            .then(() => {
-            })
-            .catch((error) => {
-              if (error.name === 'AbortError') {
-                return;
-              }
-            });
-        }
-      };
-    }
+    // Précharger la vidéo de transition pour éviter les flashes
+    setIsTransitioning(true);
+    const transitionUrl = getOptimizedVideoUrl(transitionVideo);
+    setNextVideoSrc(transitionUrl);
+
+    // Créer un élément vidéo temporaire pour précharger
+    const preloadVideo = document.createElement('video');
+    preloadVideo.src = transitionUrl;
+    preloadVideo.preload = 'auto';
+    preloadVideo.load();
+
+    preloadVideo.addEventListener('canplaythrough', () => {
+      // Une fois préchargée, faire la transition
+      if (videoRef.current) {
+        videoRef.current.src = transitionUrl;
+        videoRef.current.volume = 0;
+        videoRef.current.load();
+        
+        // Attendre que la vidéo soit chargée puis la lancer
+        videoRef.current.onloadeddata = () => {
+          if (videoRef.current) {
+            videoRef.current.play()
+              .then(() => {
+                setIsTransitioning(false);
+                setNextVideoSrc(null);
+              })
+              .catch((error) => {
+                if (error.name === 'AbortError') {
+                  return;
+                }
+                setIsTransitioning(false);
+                setNextVideoSrc(null);
+              });
+          }
+        };
+      }
+    });
+
     setVideoEnded(false);
     setIsPlaying(true);
     setVideoType("transition");
@@ -237,25 +277,43 @@ export default function Home() {
     setExplanatoryVideo(explanatoryVideoId);
     setShowExplanatoryVideo(false);
 
-    if (videoRef.current) {
-      videoRef.current.src = getOptimizedVideoUrl(objetVideo);
-      videoRef.current.volume = 0;
-      videoRef.current.load();
-      
-      // Attendre que la vidéo soit chargée puis la lancer
-      videoRef.current.onloadeddata = () => {
-        if (videoRef.current) {
-          videoRef.current.play()
-            .then(() => {
-            })
-            .catch((error) => {
-              if (error.name === 'AbortError') {
-                return;
-              }
-            });
-        }
-      };
-    }
+    // Précharger la vidéo objet pour éviter les flashes
+    setIsTransitioning(true);
+    const objetUrl = getOptimizedVideoUrl(objetVideo);
+    setNextVideoSrc(objetUrl);
+
+    // Créer un élément vidéo temporaire pour précharger
+    const preloadVideo = document.createElement('video');
+    preloadVideo.src = objetUrl;
+    preloadVideo.preload = 'auto';
+    preloadVideo.load();
+
+    preloadVideo.addEventListener('canplaythrough', () => {
+      // Une fois préchargée, faire la transition
+      if (videoRef.current) {
+        videoRef.current.src = objetUrl;
+        videoRef.current.volume = 0;
+        videoRef.current.load();
+        
+        // Attendre que la vidéo soit chargée puis la lancer
+        videoRef.current.onloadeddata = () => {
+          if (videoRef.current) {
+            videoRef.current.play()
+              .then(() => {
+                setIsTransitioning(false);
+                setNextVideoSrc(null);
+              })
+              .catch((error) => {
+                if (error.name === 'AbortError') {
+                  return;
+                }
+                setIsTransitioning(false);
+                setNextVideoSrc(null);
+              });
+          }
+        };
+      }
+    });
 
     // Gérer la musique
     if (audioRef.current) {
@@ -363,25 +421,43 @@ export default function Home() {
           // Continuer outro_song pendant le générique (ne pas l'arrêter)
           // La musique outro_song continue automatiquement
           
-           if (videoRef.current) {
-             videoRef.current.src = getOptimizedVideoUrl("generique");
-             videoRef.current.volume = 0; // Pas de son pour le générique
-             videoRef.current.muted = true; // Son coupé pour le générique
-             videoRef.current.load();
-             videoRef.current.onloadeddata = () => {
-               if (videoRef.current) {
-                 
-                 videoRef.current.play()
-                   .then(() => {
-                   })
-                   .catch((error) => {
-                     if (error.name === 'AbortError') {
-                       return;
-                     }
-                   });
-               }
-             };
-           }
+          // Précharger la vidéo générique pour éviter les flashes
+          setIsTransitioning(true);
+          const generiqueUrl = getOptimizedVideoUrl("generique");
+          setNextVideoSrc(generiqueUrl);
+
+          // Créer un élément vidéo temporaire pour précharger
+          const preloadVideo = document.createElement('video');
+          preloadVideo.src = generiqueUrl;
+          preloadVideo.preload = 'auto';
+          preloadVideo.load();
+
+          preloadVideo.addEventListener('canplaythrough', () => {
+            // Une fois préchargée, faire la transition
+            if (videoRef.current) {
+              videoRef.current.src = generiqueUrl;
+              videoRef.current.volume = 0; // Pas de son pour le générique
+              videoRef.current.muted = true; // Son coupé pour le générique
+              videoRef.current.load();
+              videoRef.current.onloadeddata = () => {
+                if (videoRef.current) {
+                  videoRef.current.play()
+                    .then(() => {
+                      setIsTransitioning(false);
+                      setNextVideoSrc(null);
+                    })
+                    .catch((error) => {
+                      if (error.name === 'AbortError') {
+                        return;
+                      }
+                      setIsTransitioning(false);
+                      setNextVideoSrc(null);
+                    });
+                }
+              };
+            }
+          });
+          
           setGeneriquePlayed(true);
           setVideoEnded(false);
         }
@@ -420,7 +496,6 @@ export default function Home() {
             explanatoryVideoRef.current.load();
           }
         }
-        
         // Vérifier si la vidéo objet est terminée
         if (videoRef.current.ended) {
           // On ne fait rien, on attend le clic sur le bouton retour
@@ -430,7 +505,6 @@ export default function Home() {
       }
     }
   };
-
   const handleVolumeChange = (volume: number) => {
     setVideoVolume(volume);
     if (videoRef.current && audioRef.current) {
@@ -626,25 +700,41 @@ export default function Home() {
       }, 500);
     }
 
-    if (videoRef.current) {
-      // D'abord, on arrête la vidéo actuelle
-      videoRef.current.pause();
-      videoRef.current.currentTime = 0;
-      
-      // Ensuite, on change la source
-      videoRef.current.src = getOptimizedVideoUrl(povVideo);
-      videoRef.current.volume = 0;
-      
-      // On attend que la vidéo soit chargée avant de la lancer
-      videoRef.current.onloadeddata = () => {
-        if (videoRef.current) {
-          videoRef.current.currentTime = 0;
-          videoRef.current.play();
-          setVideoEnded(false);
-          setIsPlaying(true);
-        }
-      };
-    }
+    // Précharger la vidéo POV pour éviter les flashes
+    setIsTransitioning(true);
+    const povUrl = getOptimizedVideoUrl(povVideo);
+    setNextVideoSrc(povUrl);
+
+    // Créer un élément vidéo temporaire pour précharger
+    const preloadVideo = document.createElement('video');
+    preloadVideo.src = povUrl;
+    preloadVideo.preload = 'auto';
+    preloadVideo.load();
+
+    preloadVideo.addEventListener('canplaythrough', () => {
+      // Une fois préchargée, faire la transition
+      if (videoRef.current) {
+        // D'abord, on arrête la vidéo actuelle
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+        
+        // Ensuite, on change la source
+        videoRef.current.src = povUrl;
+        videoRef.current.volume = 0;
+        
+        // On attend que la vidéo soit chargée avant de la lancer
+        videoRef.current.onloadeddata = () => {
+          if (videoRef.current) {
+            videoRef.current.currentTime = 0;
+            videoRef.current.play();
+            setVideoEnded(false);
+            setIsPlaying(true);
+            setIsTransitioning(false);
+            setNextVideoSrc(null);
+          }
+        };
+      }
+    });
   };
 
   // Gestionnaire pour la fin de la musique principale
@@ -706,6 +796,10 @@ export default function Home() {
       
       {/* Vidéo en arrière-plan absolu */}
       <div className="absolute inset-0 w-full h-full overflow-hidden" style={{ zIndex: 0 }}>
+        {/* Overlay noir simple pendant les transitions */}
+        {isTransitioning && (
+          <div className="absolute inset-0 bg-black" style={{ zIndex: 5 }} />
+        )}
         <video
           ref={videoRef}
           className="w-full h-full object-cover pointer-events-none"
@@ -718,8 +812,9 @@ export default function Home() {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            opacity: isPlaying ? 1 : 0,
-            transition: 'opacity 0.3s ease-in-out'
+            opacity: isPlaying && !isTransitioning ? 1 : 0,
+            transition: 'opacity 0.8s ease-in-out',
+            backgroundColor: 'transparent'
           }}
         />
         {/* Audio pour la musique de fond */}
