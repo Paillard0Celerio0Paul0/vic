@@ -1,56 +1,89 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { getVideoConfig, getCloudinaryVideos, getVimeoVideos } from '../utils/videoRouter';
 
-interface VideoPreloaderProps {
+interface HybridVideoPreloaderProps {
   currentVideo: string;
   videoType: string;
 }
 
-const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
+const HybridVideoPreloader = ({ currentVideo, videoType }: HybridVideoPreloaderProps) => {
   const preloadedVideos = useRef<Set<string>>(new Set());
 
-  // Fonction pour obtenir l'URL optimisée avec transformations Cloudinary
-  const getOptimizedVideoUrl = (videoId: string) => {
-    // URL simple sans transformations pour tester
-    // Si cela fonctionne, on pourra réajouter les transformations
-    return `https://res.cloudinary.com/dpqjlqwcq/video/upload/${videoId}`;
-  };
-
-  // Fonction pour précharger une vidéo
-  const preloadVideo = (videoId: string) => {
+  // Fonction pour précharger une vidéo Cloudinary
+  const preloadCloudinaryVideo = (videoId: string) => {
     if (preloadedVideos.current.has(videoId)) {
       return; // Déjà préchargée
     }
 
+    const config = getVideoConfig(videoId);
+    if (!config || config.platform !== 'cloudinary') return;
+
     const video = document.createElement('video');
-    video.preload = 'metadata'; // Précharge les métadonnées et le début de la vidéo
-    video.src = getOptimizedVideoUrl(videoId);
+    video.preload = 'metadata';
+    video.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/q_auto,f_auto,w_1920/${config.cloudinaryId}`;
     video.style.display = 'none';
     video.style.position = 'absolute';
     video.style.left = '-9999px';
     
-    // Ajouter des gestionnaires d'événements pour le débogage
     video.addEventListener('loadstart', () => {
-      console.log(`Début du préchargement: ${videoId}`);
+      console.log(`[Cloudinary] Début du préchargement: ${videoId}`);
     });
     
     video.addEventListener('loadedmetadata', () => {
-      console.log(`Métadonnées chargées: ${videoId}`);
+      console.log(`[Cloudinary] Métadonnées chargées: ${videoId}`);
       preloadedVideos.current.add(videoId);
     });
     
     video.addEventListener('error', (e) => {
-      console.error(`Erreur de préchargement pour ${videoId}:`, e);
+      console.error(`[Cloudinary] Erreur de préchargement pour ${videoId}:`, e);
     });
 
     document.body.appendChild(video);
   };
 
+  // Fonction pour précharger une vidéo Vimeo
+  const preloadVimeoVideo = (videoId: string) => {
+    if (preloadedVideos.current.has(videoId)) {
+      return; // Déjà préchargée
+    }
+
+    const config = getVideoConfig(videoId);
+    if (!config || config.platform !== 'vimeo') return;
+
+    // Pour Vimeo, on précharge les métadonnées via l'API
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://player.vimeo.com/video/${config.vimeoId}?autoplay=0&muted=1&controls=0&loop=0`;
+    iframe.style.display = 'none';
+    iframe.style.position = 'absolute';
+    iframe.style.left = '-9999px';
+    iframe.style.width = '1px';
+    iframe.style.height = '1px';
+    
+    iframe.addEventListener('load', () => {
+      console.log(`[Vimeo] Préchargement démarré: ${videoId}`);
+      preloadedVideos.current.add(videoId);
+    });
+    
+    iframe.addEventListener('error', (e) => {
+      console.error(`[Vimeo] Erreur de préchargement pour ${videoId}:`, e);
+    });
+
+    document.body.appendChild(iframe);
+  };
+
   // Fonction pour précharger un ensemble de vidéos
   const preloadVideoSet = (videoIds: string[]) => {
     videoIds.forEach(videoId => {
-      preloadVideo(videoId);
+      const config = getVideoConfig(videoId);
+      if (!config) return;
+
+      if (config.platform === 'cloudinary') {
+        preloadCloudinaryVideo(videoId);
+      } else if (config.platform === 'vimeo') {
+        preloadVimeoVideo(videoId);
+      }
     });
   };
 
@@ -64,13 +97,10 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
     
     // Vidéos d'objets
     const objectVideos = [
-      'objet_velo', 'objet_boxe', 'objet_foot', 'objet_mapmonde', 
+      'velo', 'objet_boxe', 'objet_foot', 'objet_mapmonde', 
       'objet_sablier', 'objet_plante', 'objet_cd', 'objet_chien', 
       'objet_jeuxvideo', 'objet_photo'
     ];
-
-    // Vidéos de fin de jeu
-    const endGameVideos = ['OUTRO_dmozy4', 'generique'];
 
     // Précharger les vidéos critiques immédiatement
     preloadVideoSet(criticalVideos);
@@ -84,11 +114,6 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
     setTimeout(() => {
       preloadVideoSet(objectVideos);
     }, 3000);
-
-    // Précharger les vidéos de fin de jeu après 5 secondes
-    setTimeout(() => {
-      preloadVideoSet(endGameVideos);
-    }, 5000);
 
     // Préchargement contextuel basé sur la vidéo actuelle
     if (currentVideo === 'introduction') {
@@ -122,23 +147,23 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
     preloadBasedOnCurrentState();
   }, [currentVideo, videoType]);
 
-  // Préchargement de la musique principale
+  // Préchargement de la musique principale (Cloudinary)
   useEffect(() => {
     const audio = document.createElement('audio');
     audio.preload = 'metadata';
-    audio.src = getOptimizedVideoUrl('main_song');
+    audio.src = 'https://res.cloudinary.com/dpqjlqwcq/video/upload/q_auto,f_auto/main_song';
     audio.style.display = 'none';
     audio.style.position = 'absolute';
     audio.style.left = '-9999px';
     
     audio.addEventListener('loadedmetadata', () => {
-      console.log('Musique principale préchargée');
+      console.log('[Cloudinary] Musique principale préchargée');
     });
 
     document.body.appendChild(audio);
   }, []);
 
-  // Préchargement des musiques d'objets
+  // Préchargement des musiques d'objets (Cloudinary)
   useEffect(() => {
     const objectsWithMusic = ['boxe', 'foot', 'chien', 'jeuxvideo'];
     
@@ -146,13 +171,13 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
       objectsWithMusic.forEach(objectType => {
         const audio = document.createElement('audio');
         audio.preload = 'metadata';
-        audio.src = getOptimizedVideoUrl(`${objectType}_song`);
+        audio.src = `https://res.cloudinary.com/dpqjlqwcq/video/upload/q_auto,f_auto/${objectType}_song`;
         audio.style.display = 'none';
         audio.style.position = 'absolute';
         audio.style.left = '-9999px';
         
         audio.addEventListener('loadedmetadata', () => {
-          console.log(`Musique ${objectType} préchargée`);
+          console.log(`[Cloudinary] Musique ${objectType} préchargée`);
         });
 
         document.body.appendChild(audio);
@@ -163,4 +188,5 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
   return null; // Ce composant ne rend rien visuellement
 };
 
-export default VideoPreloader;
+export default HybridVideoPreloader;
+

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import VolumeControl from '../components/VolumeControl';
 import InteractiveZones from '../components/InteractiveZones';
 import VideoPreloader from '../components/VideoPreloader';
 
@@ -9,23 +8,131 @@ export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoVolume, setVideoVolume] = useState(1);
   const [videoEnded, setVideoEnded] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
   const [currentVideo, setCurrentVideo] = useState<"introduction" | "POV_1" | "POV_2" | "POV_3" | 
-    "objet_vélo" | "objet_boxe" | "objet_foot" |
+    "objet_velo" | "objet_boxe" | "objet_foot" |
     "objet_mapmonde" | "objet_sablier" | "objet_plante" | "objet_cd" |
     "objet_chien" | "objet_jeuxvideo" | "objet_photo">("introduction");
-  const [videoType, setVideoType] = useState<"introduction" | "lit" | "POV" | "transition" | "objet">("introduction");
+  const [videoType, setVideoType] = useState<"introduction" | "lit" | "POV" | "transition" | "objet" | "outro" | "generique">("introduction");
   const [nextPOV, setNextPOV] = useState<"POV_1" | "POV_2" | "POV_3" | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [mainSongTime, setMainSongTime] = useState(0);
   const [isFading, setIsFading] = useState(false);
-  const [showLogo, setShowLogo] = useState(false);
-  const [logoOpacity, setLogoOpacity] = useState(1);
+  const [loadingText, setLoadingText] = useState("");
+  const [isLoadingComplete, setIsLoadingComplete] = useState(false);
+  const [explanatoryVideo, setExplanatoryVideo] = useState<string | null>(null);
+  const [showExplanatoryVideo, setShowExplanatoryVideo] = useState(false);
+  const explanatoryVideoRef = useRef<HTMLVideoElement>(null);
+  const [score, setScore] = useState(0);
+  const [validatedObjects, setValidatedObjects] = useState<Set<string>>(new Set());
+  const [showScore, setShowScore] = useState(false);
+  const [gameCompleted, setGameCompleted] = useState(false);
+  const [outroPlayed, setOutroPlayed] = useState(false);
+  const [generiquePlayed, setGeneriquePlayed] = useState(false);
 
   // Fonction pour obtenir l'URL optimisée avec transformations Cloudinary
   const getOptimizedVideoUrl = (videoId: string) => {
-    return `https://res.cloudinary.com/dpqjlqwcq/video/upload/q_auto,f_auto,w_1920/${videoId}`;
+    // URL simple sans transformations pour tester
+    // Si cela fonctionne, on pourra réajouter les transformations
+    const version = "v3"; // Changez ceci quand vous uploadez de nouvelles vidéos
+    return `https://res.cloudinary.com/dpqjlqwcq/video/upload/${videoId}?v=${version}`;
+  };
+
+  // Fonction pour tester si une vidéo explicative existe
+  const testExplanatoryVideo = (videoId: string) => {
+    const testVideo = document.createElement('video');
+    testVideo.src = getOptimizedVideoUrl(videoId);
+    testVideo.onloadstart = () => console.log('🔍 Test chargement:', videoId);
+    testVideo.onloadedmetadata = () => console.log('✅ Vidéo explicative existe:', videoId);
+    testVideo.onerror = () => console.error('❌ Vidéo explicative n\'existe pas:', videoId);
+    testVideo.load();
+  };
+
+  // Fonction pour masquer manuellement la vidéo explicative
+  const hideExplanatoryVideo = () => {
+    console.log('📝 Masquage manuel de la vidéo explicative');
+    setShowExplanatoryVideo(false);
+    setExplanatoryVideo(null);
+    if (explanatoryVideoRef.current) {
+      explanatoryVideoRef.current.pause();
+      explanatoryVideoRef.current.currentTime = 0;
+    }
+  };
+
+  // Fonction pour lancer la séquence de fin
+  const launchEndSequence = () => {
+    console.log('🎬 Lancement de OUTRO_dmozy4');
+    setCurrentVideo("OUTRO_dmozy4" as any);
+    setVideoType("outro");
+    
+    // Arrêter la musique principale pendant la séquence de fin
+    if (audioRef.current) {
+      audioRef.current.pause();
+      console.log('🔇 Musique principale arrêtée pour la séquence de fin');
+    }
+    
+    if (videoRef.current) {
+      videoRef.current.src = getOptimizedVideoUrl("OUTRO_dmozy4");
+      videoRef.current.volume = 1.0; // Volume maximum pour la vidéo finale
+      videoRef.current.muted = false; // S'assurer que le son n'est pas coupé
+      videoRef.current.load();
+      videoRef.current.onloadeddata = () => {
+        if (videoRef.current) {
+          console.log('🔊 État audio OUTRO:', {
+            volume: videoRef.current.volume,
+            muted: videoRef.current.muted,
+            src: videoRef.current.src
+          });
+          
+          videoRef.current.play()
+            .then(() => {
+              console.log('✅ OUTRO_dmozy4 démarrée');
+              console.log('🔊 Volume final OUTRO:', videoRef.current?.volume);
+              
+              // Masquer le score quelques secondes après le démarrage de l'outro
+              setTimeout(() => {
+                setShowScore(false);
+                console.log('📊 Score masqué après démarrage de l\'outro');
+              }, 3000); // 3 secondes après le démarrage
+            })
+            .catch((error) => {
+              if (error.name === 'AbortError') {
+                console.log('⚠️ Lecture OUTRO interrompue (normal)');
+                return;
+              }
+              console.error('❌ Erreur démarrage OUTRO:', error);
+            });
+        }
+      };
+    }
+    setOutroPlayed(true);
+    setVideoEnded(false);
+  };
+
+  // Fonction pour incrémenter le score
+  const incrementScore = (objectType: string) => {
+    if (!validatedObjects.has(objectType)) {
+      setValidatedObjects(prev => new Set([...prev, objectType]));
+      setScore(prev => {
+        const newScore = prev + 1;
+        console.log(`📊 Score incrémenté! Objet validé: ${objectType}, Nouveau score: ${newScore}`);
+        
+        // Vérifier si le jeu est terminé
+        if (newScore === 10) {
+          console.log('🎉 Jeu terminé! Score maximum atteint!');
+          setGameCompleted(true);
+          
+          // Déclencher immédiatement la séquence de fin
+          setTimeout(() => {
+            console.log('🎬 Déclenchement immédiat de la séquence de fin');
+            launchEndSequence();
+          }, 1000); // 1 seconde de délai pour laisser le temps à l'interface de se mettre à jour
+        }
+        
+        return newScore;
+      });
+    } else {
+      console.log(`📊 Objet ${objectType} déjà validé, pas de point supplémentaire`);
+    }
   };
 
   // Timecodes d'arrêt pour chaque vidéo
@@ -34,7 +141,7 @@ export default function Home() {
     "POV_1": 25,
     "POV_2": 25,
     "POV_3": 25,
-    "objet_vélo": 13,
+    "objet_velo": 13,
     "objet_boxe": 29,
     "objet_foot": 31,
     "objet_mapmonde": 31,
@@ -48,6 +155,20 @@ export default function Home() {
 
   // Liste des objets qui ont une musique associée
   const objectsWithMusic = ["boxe", "foot", "chien", "jeuxvideo"];
+
+  // Timings pour les vidéos explicatives (en secondes)
+  const explanatoryVideoTimings = {
+    "velo": 6,      
+    "boxe": 18,      
+    "foot": 17,      
+    "mapmonde": 22, 
+    "sablier": 12,   
+    "plante": 14,    
+    "cd": 8,        
+    "chien": 6,     
+    "jeuxvideo": 6, 
+    "photo": 16,     
+  } as const;
 
   // Fonction pour créer un fondu
   const fadeAudio = (audio: HTMLAudioElement, targetVolume: number, duration: number = 1000) => {
@@ -74,26 +195,44 @@ export default function Home() {
     
     // Déterminer la vidéo de transition et la vidéo POV suivante
     if (currentVideo === "POV_1") {
-      transitionVideo = direction === "left" ? "1_vers_2" : "1_vers_3";
-      nextVideo = direction === "left" ? "POV_2" : "POV_3";
+      transitionVideo = direction === "left" ? "1_vers_3" : "1_vers_2";
+      nextVideo = direction === "left" ? "POV_3" : "POV_2";
     } else if (currentVideo === "POV_2") {
       transitionVideo = direction === "left" ? "2_vers_1" : "2_vers_3";
       nextVideo = direction === "left" ? "POV_1" : "POV_3";
     } else if (currentVideo === "POV_3") {
-      transitionVideo = direction === "left" ? "3_vers_1" : "3_vers_2";
-      nextVideo = direction === "left" ? "POV_1" : "POV_2";
+      transitionVideo = direction === "left" ? "3_vers_2" : "3_vers_1";
+      nextVideo = direction === "left" ? "POV_2" : "POV_1";
     }
 
     // Stocker la vidéo POV suivante
     setNextPOV(nextVideo as "POV_1" | "POV_2" | "POV_3");
 
-    // Changer la vidéo visible
+    // Changer la vidéo visible et la lancer
     if (videoRef.current) {
       videoRef.current.src = getOptimizedVideoUrl(transitionVideo);
       videoRef.current.volume = 0;
       videoRef.current.load();
+      
+      // Attendre que la vidéo soit chargée puis la lancer
+      videoRef.current.onloadeddata = () => {
+        if (videoRef.current) {
+          videoRef.current.play()
+            .then(() => {
+              console.log('✅ Vidéo de transition démarrée:', transitionVideo);
+            })
+            .catch((error) => {
+              if (error.name === 'AbortError') {
+                console.log('⚠️ Lecture de transition interrompue (normal)');
+                return;
+              }
+              console.error('❌ Erreur démarrage vidéo de transition:', error);
+            });
+        }
+      };
     }
     setVideoEnded(false);
+    setIsPlaying(true);
     setVideoType("transition");
   };
 
@@ -103,15 +242,33 @@ export default function Home() {
     setCurrentVideo(objetVideo);
     setVideoType("objet");
     
-    // Sauvegarder le temps actuel de la musique principale
-    if (audioRef.current) {
-      setMainSongTime(audioRef.current.currentTime);
-    }
+    // Préparer la vidéo explicative
+    const explanatoryVideoId = `text_${zoneId}`;
+    setExplanatoryVideo(explanatoryVideoId);
+    setShowExplanatoryVideo(false);
 
     if (videoRef.current) {
       videoRef.current.src = getOptimizedVideoUrl(objetVideo);
       videoRef.current.volume = 0;
       videoRef.current.load();
+      
+      // Attendre que la vidéo soit chargée puis la lancer
+      videoRef.current.onloadeddata = () => {
+        if (videoRef.current) {
+          videoRef.current.play()
+            .then(() => {
+              console.log('✅ Vidéo d\'objet démarrée:', objetVideo);
+              console.log('📝 Vidéo explicative préparée:', explanatoryVideoId);
+            })
+            .catch((error) => {
+              if (error.name === 'AbortError') {
+                console.log('⚠️ Lecture d\'objet interrompue (normal)');
+                return;
+              }
+              console.error('❌ Erreur démarrage vidéo d\'objet:', error);
+            });
+        }
+      };
     }
 
     // Gérer la musique
@@ -139,20 +296,42 @@ export default function Home() {
     }
 
     setVideoEnded(false);
+    setIsPlaying(true);
   };
 
   // Gestionnaire pour vérifier le temps de la vidéo
   const handleTimeUpdate = () => {
     if (videoRef.current) {
-      // Si c'est la vidéo d'introduction, on vérifie le timecode d'arrêt
-      if (currentVideo === "introduction" && videoRef.current.currentTime >= videoEndTimes.introduction) {
-        videoRef.current.currentTime = videoEndTimes.introduction;
-        videoRef.current.pause();
-        videoRef.current.volume = 0;
-        if (audioRef.current) {
+      // À 44 secondes de la vidéo d'introduction : lancer la musique et afficher le score
+      if (currentVideo === "introduction" && videoRef.current.currentTime >= 44 && audioRef.current) {
+        if (audioRef.current.paused) {
           audioRef.current.play();
           audioRef.current.volume = videoVolume;
+          console.log('🎵 Musique lancée à 44 secondes');
         }
+        // Afficher le score à 44 secondes
+        if (!showScore) {
+          setShowScore(true);
+          console.log('📊 Score affiché à 44 secondes');
+        }
+      }
+      
+      // À 1:10 (70 secondes) de la vidéo d'introduction : lancer automatiquement lit_vers_1
+      if (currentVideo === "introduction" && videoRef.current.currentTime >= 68) {
+        console.log('🎬 Passage automatique à lit_vers_1 à 1:10');
+        setVideoType("lit");
+        setCurrentVideo("lit_vers_1" as any);
+        if (videoRef.current) {
+          videoRef.current.src = getOptimizedVideoUrl("lit_vers_1");
+          videoRef.current.volume = 0; // Pas de son pour les vidéos lit
+          videoRef.current.load();
+        }
+        setVideoEnded(false);
+      }
+      
+      // Si c'est la vidéo d'introduction, on vérifie le timecode d'arrêt
+      if (currentVideo === "introduction" && videoRef.current.currentTime >= videoEndTimes.introduction) {
+        // Ne plus faire d'arrêt sur image - laisser la vidéo se terminer naturellement
         setVideoEnded(true);
       }
       // Si c'est une vidéo POV, on vérifie le timecode d'arrêt
@@ -163,16 +342,16 @@ export default function Home() {
       }
       // Si c'est une vidéo lit, on vérifie si elle est terminée
       else if (videoType === "lit" && videoRef.current.ended) {
-        // Passer à la vidéo POV correspondante
-        const povNumber = currentVideo.split('_')[2];
-        const newVideo = `POV_${povNumber}` as "POV_1" | "POV_2" | "POV_3";
-        setCurrentVideo(newVideo);
+        console.log('🎬 Fin de la vidéo lit, passage à POV_1');
+        // Passer automatiquement à POV_1
+        setCurrentVideo("POV_1");
         setVideoType("POV");
         if (videoRef.current) {
-          videoRef.current.src = getOptimizedVideoUrl(newVideo);
-          videoRef.current.volume = 0;
+          videoRef.current.src = getOptimizedVideoUrl("POV_1");
+          videoRef.current.volume = 0; // Pas de son pour les vidéos POV
           videoRef.current.load();
         }
+        setVideoEnded(false);
       }
       // Si c'est une vidéo de transition (numero_vers_numero), on vérifie si elle est terminée
       else if (videoType === "transition" && videoRef.current.ended && nextPOV) {
@@ -186,11 +365,103 @@ export default function Home() {
           videoRef.current.load();
         }
       }
-      // Si c'est une vidéo objet, on vérifie si elle est terminée
-      else if (videoType === "objet" && videoRef.current.ended) {
-        // On ne fait rien, on attend le clic sur le bouton retour
-        videoRef.current.pause();
-        setVideoEnded(true);
+      // Séquence de fin de jeu
+      else if (gameCompleted && videoRef.current) {
+        // Générique après OUTRO
+        if (outroPlayed && !generiquePlayed && videoRef.current.ended) {
+          console.log('🎬 Lancement du générique');
+          setCurrentVideo("generique" as any);
+          setVideoType("generique");
+          
+          // S'assurer que la musique principale reste arrêtée pendant le générique
+          if (audioRef.current) {
+            audioRef.current.pause();
+            console.log('🔇 Musique principale maintenue arrêtée pendant le générique');
+          }
+          
+          if (videoRef.current) {
+            videoRef.current.src = getOptimizedVideoUrl("generique");
+            videoRef.current.volume = 1.0; // Volume maximum pour le générique
+            videoRef.current.muted = false; // S'assurer que le son n'est pas coupé
+            videoRef.current.load();
+            videoRef.current.onloadeddata = () => {
+              if (videoRef.current) {
+                console.log('🔊 État audio générique:', {
+                  volume: videoRef.current.volume,
+                  muted: videoRef.current.muted,
+                  src: videoRef.current.src
+                });
+                
+                videoRef.current.play()
+                  .then(() => {
+                    console.log('✅ Générique démarré');
+                    console.log('🔊 Volume final générique:', videoRef.current?.volume);
+                  })
+                  .catch((error) => {
+                    if (error.name === 'AbortError') {
+                      console.log('⚠️ Lecture générique interrompue (normal)');
+                      return;
+                    }
+                    console.error('❌ Erreur démarrage générique:', error);
+                  });
+              }
+            };
+          }
+          setGeneriquePlayed(true);
+          setVideoEnded(false);
+        }
+        // Rechargement de la page après générique
+        else if (outroPlayed && generiquePlayed && videoRef.current.ended) {
+          console.log('🔄 Fin du générique - Rechargement de la page');
+          
+          // Attendre 2 secondes puis recharger la page
+          setTimeout(() => {
+            console.log('🔄 Rechargement de la page...');
+            window.location.reload();
+          }, 2000);
+        }
+      }
+      // Si c'est une vidéo objet, on vérifie les timings pour les vidéos explicatives
+      else if (videoType === "objet" && videoRef.current) {
+        const objetType = currentVideo.replace("objet_", "");
+        const timing = explanatoryVideoTimings[objetType as keyof typeof explanatoryVideoTimings];
+        
+        // Déclencher la vidéo explicative au bon timing
+        if (timing && videoRef.current.currentTime >= timing && !showExplanatoryVideo && explanatoryVideo) {
+          console.log(`📝 Déclenchement vidéo explicative pour ${objetType} à ${timing}s`);
+          console.log('📝 Conditions:', {
+            timing,
+            currentTime: videoRef.current.currentTime,
+            showExplanatoryVideo,
+            explanatoryVideo
+          });
+          
+          // Tester d'abord si la vidéo explicative existe
+          testExplanatoryVideo(explanatoryVideo);
+          
+          setShowExplanatoryVideo(true);
+          
+          // Vérifier que la vidéo objet continue de jouer
+          console.log('📝 État vidéo objet:', {
+            paused: videoRef.current.paused,
+            currentTime: videoRef.current.currentTime,
+            duration: videoRef.current.duration
+          });
+          
+          // Charger la vidéo explicative (le démarrage se fera automatiquement via onCanPlay)
+          if (explanatoryVideoRef.current) {
+            explanatoryVideoRef.current.src = getOptimizedVideoUrl(explanatoryVideo);
+            explanatoryVideoRef.current.load();
+            console.log('📝 Chargement vidéo explicative lancé:', explanatoryVideo);
+          }
+        }
+        
+        // Vérifier si la vidéo objet est terminée
+        if (videoRef.current.ended) {
+          // On ne fait rien, on attend le clic sur le bouton retour
+          videoRef.current.pause();
+          setVideoEnded(true);
+        }
       }
     }
   };
@@ -207,33 +478,41 @@ export default function Home() {
   };
 
   const handlePlay = () => {
+    console.log('🎬 Démarrage de la vidéo d\'introduction');
     setIsPlaying(true);
     setVideoEnded(false);
-    setIsPaused(false);
-    setShowLogo(true);
-    setLogoOpacity(1);
-
-    // Faire disparaître progressivement le logo et le fond avec une transition plus douce
-    const startTime = Date.now();
-    const fadeOut = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / 10000, 1); // Augmentation à 10 secondes
-      // Utilisation d'une courbe d'accélération plus douce
-      const easedProgress = 1 - Math.pow(1 - progress, 4); // Courbe d'accélération quartique
-      setLogoOpacity(1 - easedProgress);
-
-      if (progress < 1) {
-        requestAnimationFrame(fadeOut);
-      } else {
-        setShowLogo(false);
-      }
-    };
-
-    fadeOut();
 
     // Démarrer la vidéo et l'audio
     if (videoRef.current && audioRef.current) {
-      videoRef.current.play();
+      const videoUrl = getOptimizedVideoUrl(currentVideo);
+      console.log('🎬 URL générée:', videoUrl);
+      console.log('🎬 Current video:', currentVideo);
+      
+      // S'assurer que la source est bien définie
+      if (videoRef.current.src !== videoUrl) {
+        videoRef.current.src = videoUrl;
+        console.log('🎬 Source vidéo mise à jour');
+      }
+      
+      videoRef.current.play()
+        .then(() => {
+          console.log('✅ Vidéo d\'introduction démarrée avec succès');
+        })
+        .catch((error) => {
+          // Ignorer les erreurs AbortError (conflits de chargement)
+          if (error.name === 'AbortError') {
+            console.log('⚠️ Lecture interrompue par un nouveau chargement (normal)');
+            return;
+          }
+          console.error('❌ Erreur démarrage vidéo:', error);
+          console.error('❌ URL problématique:', videoUrl);
+          console.error('❌ État de la vidéo:', {
+            src: videoRef.current?.src,
+            readyState: videoRef.current?.readyState,
+            networkState: videoRef.current?.networkState
+          });
+        });
+      
       // Si c'est la vidéo d'introduction, on active son audio
       if (currentVideo === "introduction") {
         videoRef.current.volume = videoVolume;
@@ -246,41 +525,82 @@ export default function Home() {
     }
   };
 
-  const handlePausePlay = () => {
-    if (videoRef.current && audioRef.current) {
-      if (videoRef.current.paused) {
-        videoRef.current.play();
-        if (currentVideo === "introduction") {
-          audioRef.current.pause();
-        } else {
-          audioRef.current.play();
-        }
-        setIsPaused(false);
+  // Effet typewriting pour "Chargement..."
+  useEffect(() => {
+    const text = "Chargement...";
+    let currentIndex = 0;
+    
+    // Test de l'URL de la vidéo d'introduction
+    const introUrl = getOptimizedVideoUrl("introduction");
+    console.log('🔍 URL vidéo d\'introduction:', introUrl);
+    
+    const typeInterval = setInterval(() => {
+      if (currentIndex <= text.length) {
+        setLoadingText(text.slice(0, currentIndex));
+        currentIndex++;
       } else {
-        videoRef.current.pause();
-        audioRef.current.pause();
-        setIsPaused(true);
+        clearInterval(typeInterval);
+        setIsLoadingComplete(true);
+        // Ne plus démarrer automatiquement - attendre l'interaction utilisateur
+        console.log('✅ Chargement terminé - En attente d\'interaction utilisateur');
       }
-    }
-  };
+    }, 400); // Vitesse du typewriting plus lente (400ms par caractère)
 
-  const handleInteractiveButton = (buttonNumber: number) => {
-    // Changer la vidéo visible tout en gardant la musique de fond
-    const litVideo = `lit_vers_${buttonNumber}`;
-    setVideoType("lit");
-    setCurrentVideo(litVideo as any); // Mise à jour temporaire pour le type
-    if (videoRef.current) {
-      videoRef.current.src = getOptimizedVideoUrl(litVideo);
-      videoRef.current.volume = 0;
-      videoRef.current.load();
-    }
-    setVideoEnded(false);
-  };
+    return () => clearInterval(typeInterval);
+  }, []); // Se lance une seule fois au montage du composant
+
+
 
   // Gestionnaire pour démarrer la vidéo une fois chargée
   const handleVideoLoaded = () => {
-    if (videoRef.current && !videoEnded && currentVideo !== "introduction") {
-      videoRef.current.play();
+    console.log('✅ Vidéo chargée:', currentVideo, 'isPlaying:', isPlaying);
+    
+    // Auto-démarrer les vidéos lit après chargement
+    if (videoType === "lit" && videoRef.current) {
+      console.log('🎬 Auto-démarrage de la vidéo lit:', currentVideo);
+      videoRef.current.play()
+        .then(() => {
+          console.log('✅ Vidéo lit démarrée avec succès');
+        })
+        .catch((error) => {
+          if (error.name === 'AbortError') {
+            console.log('⚠️ Lecture lit interrompue (normal)');
+            return;
+          }
+          console.error('❌ Erreur démarrage vidéo lit:', error);
+        });
+    }
+    
+    // Auto-démarrer les vidéos POV après chargement
+    if (videoType === "POV" && videoRef.current) {
+      console.log('🎬 Auto-démarrage de la vidéo POV:', currentVideo);
+      videoRef.current.play()
+        .then(() => {
+          console.log('✅ Vidéo POV démarrée avec succès');
+        })
+        .catch((error) => {
+          if (error.name === 'AbortError') {
+            console.log('⚠️ Lecture POV interrompue (normal)');
+            return;
+          }
+          console.error('❌ Erreur démarrage vidéo POV:', error);
+        });
+    }
+    
+    // Auto-démarrer les vidéos de transition après chargement
+    if (videoType === "transition" && videoRef.current) {
+      console.log('🎬 Auto-démarrage de la vidéo de transition:', currentVideo);
+      videoRef.current.play()
+        .then(() => {
+          console.log('✅ Vidéo de transition démarrée avec succès');
+        })
+        .catch((error) => {
+          if (error.name === 'AbortError') {
+            console.log('⚠️ Lecture de transition interrompue (normal)');
+            return;
+          }
+          console.error('❌ Erreur démarrage vidéo de transition:', error);
+        });
     }
   };
 
@@ -294,7 +614,6 @@ export default function Home() {
     // Ensuite, on met à jour les états
     setVideoEnded(true);
     setIsPlaying(true);
-    setIsPaused(false);
     setVideoType("introduction");
     setCurrentVideo("introduction");
 
@@ -309,13 +628,17 @@ export default function Home() {
 
   // Gestionnaire pour retourner à la vidéo POV
   const handleReturnToPOV = () => {
+    console.log('🔄 Bouton Continuer cliqué, currentVideo:', currentVideo);
+    
     // Déterminer le POV en fonction de la vidéo d'objet
     let povVideo: "POV_1" | "POV_2" | "POV_3";
    
     // Extraire le type d'objet en enlevant le préfixe "objet_"
-    const objetType = currentVideo;
-    // POV_1 pour vélo, boxe et foot
-    if (["vélo", "boxe", "foot"].includes(objetType)) {
+    const objetType = currentVideo.replace("objet_", "");
+    console.log('🎯 Type d\'objet extrait:', objetType);
+    
+    // POV_1 pour velo, boxe et foot
+    if (["velo", "boxe", "foot"].includes(objetType)) {
       povVideo = "POV_1";
     }
     // POV_2 pour mapmonde, cd, plante et sablier
@@ -326,7 +649,18 @@ export default function Home() {
     else if (["chien", "photo", "jeuxvideo"].includes(objetType)) {
       povVideo = "POV_3";
     } else {
+      console.error('❌ Objet non reconnu:', objetType);
       return; // Si l'objet n'est pas reconnu, on ne fait rien
+    }
+    
+    console.log('🎬 Retour vers POV:', povVideo);
+
+    // Nettoyer les vidéos explicatives
+    setExplanatoryVideo(null);
+    setShowExplanatoryVideo(false);
+    if (explanatoryVideoRef.current) {
+      explanatoryVideoRef.current.pause();
+      explanatoryVideoRef.current.currentTime = 0;
     }
 
     setCurrentVideo(povVideo);
@@ -340,7 +674,6 @@ export default function Home() {
       setTimeout(() => {
         if (audioRef.current) {
           audioRef.current.src = getOptimizedVideoUrl("main_song");
-          audioRef.current.currentTime = mainSongTime;
           audioRef.current.volume = 0;
           audioRef.current.play();
           fadeAudio(audioRef.current, videoVolume, 500); // Fade in sur 500ms
@@ -364,7 +697,6 @@ export default function Home() {
           videoRef.current.currentTime = 0;
           videoRef.current.play();
           setVideoEnded(false);
-          setIsPaused(false);
           setIsPlaying(true);
         }
       };
@@ -403,6 +735,14 @@ export default function Home() {
     }
   }, [videoVolume, currentVideo]);
 
+  // Surveiller la création de la vidéo explicative
+  useEffect(() => {
+    if (showExplanatoryVideo && explanatoryVideo && explanatoryVideoRef.current) {
+      console.log('📝 Vidéo explicative créée dans le DOM:', explanatoryVideo);
+      console.log('📝 Référence:', explanatoryVideoRef.current);
+    }
+  }, [showExplanatoryVideo, explanatoryVideo]);
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
       {/* Préchargeur de vidéos */}
@@ -415,6 +755,7 @@ export default function Home() {
           className="w-full h-full object-cover pointer-events-none"
           src={getOptimizedVideoUrl(currentVideo)}
           playsInline
+          preload="auto"
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
           style={{
@@ -430,7 +771,91 @@ export default function Home() {
           ref={audioRef}
           src={getOptimizedVideoUrl("main_song")}
           loop
+          preload="auto"
         />
+        
+        {/* Vidéo explicative superposée */}
+        {showExplanatoryVideo && explanatoryVideo && (
+          <video
+            ref={explanatoryVideoRef}
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+            src={getOptimizedVideoUrl(explanatoryVideo)}
+            playsInline
+            preload="auto"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              zIndex: 15, // Plus élevé que la vidéo principale (zIndex: 0)
+              opacity: 1,
+              transition: 'opacity 0.5s ease-in-out',
+              // Mode de fusion pour rendre le noir transparent
+              mixBlendMode: 'screen', // Essaie ceci d'abord
+              // Ou utilisez 'screen' pour éclaircir
+              // Ou 'overlay' pour un effet différent
+            }}
+            onLoadStart={() => {
+              console.log('📝 Début chargement vidéo explicative:', explanatoryVideo);
+            }}
+            onLoadedMetadata={() => {
+              console.log('📝 Métadonnées vidéo explicative chargées:', explanatoryVideo);
+            }}
+            onCanPlay={() => {
+              console.log('📝 Vidéo explicative prête à jouer:', explanatoryVideo);
+              console.log('📝 Dimensions vidéo:', {
+                videoWidth: explanatoryVideoRef.current?.videoWidth,
+                videoHeight: explanatoryVideoRef.current?.videoHeight,
+                duration: explanatoryVideoRef.current?.duration
+              });
+              console.log('📝 État vidéo explicative:', {
+                paused: explanatoryVideoRef.current?.paused,
+                currentTime: explanatoryVideoRef.current?.currentTime,
+                readyState: explanatoryVideoRef.current?.readyState,
+                networkState: explanatoryVideoRef.current?.networkState
+              });
+              
+              // Démarrer automatiquement la vidéo explicative
+              if (explanatoryVideoRef.current) {
+                explanatoryVideoRef.current.play()
+                  .then(() => {
+                    console.log('✅ Vidéo explicative démarrée automatiquement:', explanatoryVideo);
+                  })
+                  .catch((error) => {
+                    if (error.name === 'AbortError') {
+                      console.log('⚠️ Lecture explicative interrompue (normal)');
+                      return;
+                    }
+                    console.error('❌ Erreur démarrage automatique vidéo explicative:', error);
+                  });
+              }
+            }}
+            onError={(e) => {
+              console.error('❌ Erreur vidéo explicative:', explanatoryVideo, e);
+              console.error('❌ URL problématique:', getOptimizedVideoUrl(explanatoryVideo));
+            }}
+            onEnded={() => {
+              console.log('📝 Vidéo explicative terminée - arrêt sur image');
+              // Ne pas masquer la vidéo, la laisser sur la dernière image
+              // setShowExplanatoryVideo(false);
+              // setExplanatoryVideo(null);
+            }}
+          />
+        )}
+        
+
+      
+            {/* Affichage du score */}
+            {showScore && (
+              <div className="absolute top-8 right-8 text-right z-20">
+                <div className="text-pink-500 text-2xl font-bold dogica-pink">
+                  Score
+                </div>
+                <div className="text-white text-lg dogica-white">
+                  {score} / 10
+                </div>
+              
+              </div>
+            )}
       </div>
 
       {/* Contenu interactif au premier plan */}
@@ -438,127 +863,84 @@ export default function Home() {
         {!isPlaying && currentVideo === "introduction" ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black">
             <div className="text-center">
-              <button
-                onClick={handlePlay}
-                className="bg-blue-500 hover:bg-blue-600 text-white text-xl px-8 py-4 rounded-lg transition-colors transform hover:scale-105"
-              >
-                Jouer
-              </button>
+              {!isLoadingComplete ? (
+                <div className="dogica-white text-4xl">
+                  {loadingText}
+                  <span className="animate-pulse">|</span>
+                </div>
+              ) : (
+                <button
+                  onClick={handlePlay}
+                  className="dogica-white text-4xl bg-transparent border-2 border-white px-8 py-4 rounded-lg hover:bg-white hover:text-black transition-all duration-300 transform hover:scale-105"
+                >
+                  Commencer
+                </button>
+              )}
             </div>
           </div>
         ) : (
           <>
-            {/* Superposition du logo */}
-            {showLogo && (
-              <div 
-                className="absolute inset-0 flex items-center justify-center transition-all duration-1000 ease-in-out"
-                style={{ 
-                  opacity: logoOpacity, 
-                  zIndex: 20,
-                  background: `rgba(0, 0, 0, ${logoOpacity})`,
-                  transition: 'background 1s ease-in-out, opacity 1s ease-in-out'
-                }}
-              >
-                <img 
-                  src="/locg_logo.png" 
-                  alt="Logo" 
-                  className="max-w-[80%] max-h-[80%] object-contain transition-all duration-1000 ease-in-out"
-                  style={{
-                    opacity: logoOpacity,
-                    transform: `scale(${0.8 + (logoOpacity * 0.2)})`,
-                    transition: 'opacity 1s ease-in-out, transform 1s ease-in-out'
-                  }}
-                />
-              </div>
-            )}
-            
-            {/* Interface de contrôle superposée */}
-            <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start">
-             
-              {!videoEnded && currentVideo === "introduction" && (
-                <button
-                  onClick={handlePausePlay}
-                  className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 flex items-center gap-2 backdrop-blur-sm"
-                >
-                  {isPaused ? (
-                    <>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                      </svg>
-                      Reprendre
-                    </>
-                  ) : (
-                    <>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Pause
-                    </>
-                  )}
-                </button>
-              )}
 
-              {/* Contrôle du volume - toujours visible */}
-              <VolumeControl onVolumeChange={handleVolumeChange} />
-            </div>
 
-            {/* Boutons d'options - visibles uniquement à la fin de la vidéo d'introduction */}
-            {videoEnded && currentVideo === "introduction" && (
-              <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 flex flex-row gap-4">
-                <button
-                  onClick={() => handleInteractiveButton(1)}
-                  className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex flex-col items-center justify-center gap-2"
-                >
-                  <img src="/icons/boxgloves.svg" alt="Boxing Gloves" className="w-12 h-12 invert brightness-0" />
-                  <span className="text-lg">1</span>
-                </button>
-                <button
-                  onClick={() => handleInteractiveButton(2)}
-                  className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex flex-col items-center justify-center gap-2"
-                >
-                  <img src="/icons/desk.svg" alt="Desk" className="w-12 h-12 invert brightness-0" />
-                  <span className="text-lg">2</span>
-                </button>
-                <button
-                  onClick={() => handleInteractiveButton(3)}
-                  className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex flex-col items-center justify-center gap-2"
-                >
-                  <img src="/icons/armoire.svg" alt="Wardrobe" className="w-12 h-12 invert brightness-0" />
-                  <span className="text-lg">3</span>
-                </button>
-              </div>
-            )}
-
-            {/* Boutons latéraux pour les vidéos POV */}
+            {/* Flèches de navigation pour les vidéos POV */}
             {videoType === "POV" && currentVideo !== "introduction" && (
               <>
-                {/* Bouton gauche */}
-                <button
-                  onClick={() => handleTransition("left")}
-                  className="absolute left-8 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex items-center justify-center"
-                >
-                  <img 
-                    src={`/icons/${currentVideo === "POV_1" ? "desk" : 
-                          currentVideo === "POV_2" ? "boxgloves" : 
-                          "boxgloves"}.svg`} 
-                    alt="Left transition" 
-                    className="w-12 h-12 invert brightness-0" 
-                  />
-                </button>
+                {/* POV_1 : Flèche droite vers POV_2 */}
+                {currentVideo === "POV_1" && (
+                  <button
+                    onClick={() => handleTransition("right")}
+                    className="absolute right-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center"
+                  >
+                    <img 
+                      src="/icons/fleche-right.svg" 
+                      alt="Vers POV_2" 
+                      className="w-12 h-12 filter drop-shadow-lg hover:drop-shadow-xl transition-all" 
+                    />
+                  </button>
+                )}
 
-                {/* Bouton droit */}
-                <button
-                  onClick={() => handleTransition("right")}
-                  className="absolute right-8 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-6 rounded-lg transition-all transform hover:scale-105 backdrop-blur-sm flex items-center justify-center"
-                >
-                  <img 
-                    src={`/icons/${currentVideo === "POV_1" ? "armoire" : 
-                          currentVideo === "POV_2" ? "armoire" : 
-                          "desk"}.svg`} 
-                    alt="Right transition" 
-                    className="w-12 h-12 invert brightness-0" 
-                  />
-                </button>
+                {/* POV_2 : Flèche gauche vers POV_1 et flèche droite vers POV_3 */}
+                {currentVideo === "POV_2" && (
+                  <>
+                    {/* Flèche gauche vers POV_1 */}
+                    <button
+                      onClick={() => handleTransition("left")}
+                      className="absolute left-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center"
+                    >
+                      <img 
+                        src="/icons/fleche-left.svg" 
+                        alt="Vers POV_1" 
+                        className="w-12 h-12 filter drop-shadow-lg hover:drop-shadow-xl transition-all" 
+                      />
+                    </button>
+                    
+                    {/* Flèche droite vers POV_3 */}
+                    <button
+                      onClick={() => handleTransition("right")}
+                      className="absolute right-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center"
+                    >
+                      <img 
+                        src="/icons/fleche-right.svg" 
+                        alt="Vers POV_3" 
+                        className="w-12 h-12 filter drop-shadow-lg hover:drop-shadow-xl transition-all" 
+                      />
+                    </button>
+                  </>
+                )}
+
+                {/* POV_3 : Flèche gauche vers POV_2 */}
+                {currentVideo === "POV_3" && (
+                  <button
+                    onClick={() => handleTransition("left")}
+                    className="absolute left-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center"
+                  >
+                    <img 
+                      src="/icons/fleche-left.svg" 
+                      alt="Vers POV_2" 
+                      className="w-12 h-12 filter drop-shadow-lg hover:drop-shadow-xl transition-all" 
+                    />
+                  </button>
+                )}
               </>
             )}
 
@@ -570,16 +952,36 @@ export default function Home() {
               />
             )}
 
-            {/* Bouton Continuer - visible uniquement à la fin des vidéos d'objets */}
+            {/* Flèche de retour - visible uniquement à la fin des vidéos d'objets */}
             {videoType === "objet" && videoEnded && (
               <button
-                onClick={handleReturnToPOV}
-                className="absolute bottom-8 right-8 bg-black bg-opacity-50 hover:bg-opacity-75 text-white px-6 py-3 rounded-lg transition-all transform hover:scale-105 flex items-center gap-2 backdrop-blur-sm"
+                onClick={() => {
+                  console.log('🖱️ Flèche de retour cliquée !');
+                  
+                  // Incrémenter le score pour cet objet
+                  const objectType = currentVideo.replace("objet_", "");
+                  incrementScore(objectType);
+                  
+                  // Masquer d'abord la vidéo explicative si elle est visible
+                  if (showExplanatoryVideo) {
+                    hideExplanatoryVideo();
+                  }
+                  
+                  // Si le jeu est terminé, ne pas retourner au POV
+                  if (gameCompleted) {
+                    console.log('🎉 Jeu terminé - Lancement de la séquence de fin');
+                    return;
+                  }
+                  
+                  handleReturnToPOV();
+                }}
+                className="absolute bottom-8 right-8 p-8 transition-all hover:scale-105 flex items-center justify-center"
               >
-                <span className="text-lg">Continuer</span>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
+                <img 
+                  src="/icons/fleche-right.svg" 
+                  alt="Retour au POV" 
+                  className="w-20 h-20 filter drop-shadow-lg hover:drop-shadow-xl transition-all" 
+                />
               </button>
             )}
           </>

@@ -1,0 +1,111 @@
+/* Polices Dogica personnalisées */
+@font-face {
+  font-family: 'DogicaBold';
+  src: url('/fonts/dogicabold.otf') format('opentype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DogicaPixel';
+  src: url('/fonts/dogicapixel.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DogicaPixelBold';
+  src: url('/fonts/dogicapixelbold.otf') format('opentype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Classes utilitaires pour les polices */
+.font-dogica-bold {
+  font-family: 'DogicaBold', monospace;
+}
+
+.font-dogica-pixel {
+  font-family: 'DogicaPixel', monospace;
+}
+
+.font-dogica-pixel-bold {
+  font-family: 'DogicaPixelBold', monospace;
+}
+
+/* Classes pour les couleurs Dogica */
+.text-dogica-white {
+  color: #ffffff;
+}
+
+.text-dogica-pink {
+  color: #ff0059;
+}
+
+/* Classes combinées pour police et couleur */
+.dogica-white {
+  font-family: 'DogicaPixelBold', monospace;
+  color: #ffffff;
+}
+
+.dogica-pink {
+  font-family: 'DogicaPixelBold', monospace;
+  color: #ff0059;
+}
+
+/* Animation d'écriture */
+@keyframes typewriter {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes blink-caret {
+  from, to {
+    border-color: transparent;
+  }
+  50% {
+    border-color: #fff;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.typewriter {
+  overflow: hidden;
+  border-right: 3px solid #fff;
+  white-space: nowrap;
+  margin: 0 auto;
+  letter-spacing: 0.1em;
+  animation: 
+    typewriter 2.5s steps(7, end),
+    blink-caret 0.75s step-end infinite;
+}
+
+.typewriter-text {
+  animation: fade-in 0.5s ease-in-out;
+}
+
+/* Animation de transition pour le bouton JOUER */
+.jouer-button {
+  animation: fade-in 0.8s ease-in-out;
+  transition: all 0.3s ease-in-out;
+}
+
+.jouer-button:hover {
+  transform: scale(1.05);
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+}
