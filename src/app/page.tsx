@@ -885,14 +885,14 @@ export default function Home() {
           <div className="absolute inset-0 flex items-center justify-center bg-black">
             <div className="text-center">
               {!isLoadingComplete ? (
-                <div className="dogica-white text-4xl">
+                <div className="dogica-white text-2xl">
                   {loadingText}
                   <span className="animate-pulse">|</span>
                 </div>
               ) : (
                 <button
                   onClick={handlePlay}
-                  className="dogica-white text-4xl bg-transparent border-2 border-white px-8 py-4 rounded-lg hover:bg-white hover:text-black transition-all duration-300 transform hover:scale-105"
+                  className="dogica-white text-2xl bg-transparent border-2 border-white px-8 py-4 rounded-lg hover:bg-white hover:text-black transition-all duration-300 transform hover:scale-105"
                 >
                   Commencer
                 </button>
