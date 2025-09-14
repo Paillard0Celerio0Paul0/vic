@@ -31,17 +31,13 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
     video.style.left = '-9999px';
     
     // Ajouter des gestionnaires d'événements pour le débogage
-    video.addEventListener('loadstart', () => {
-      console.log(`Début du préchargement: ${videoId}`);
-    });
     
     video.addEventListener('loadedmetadata', () => {
-      console.log(`Métadonnées chargées: ${videoId}`);
       preloadedVideos.current.add(videoId);
     });
     
     video.addEventListener('error', (e) => {
-      console.error(`Erreur de préchargement pour ${videoId}:`, e);
+
     });
 
     document.body.appendChild(video);
@@ -119,10 +115,7 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
           audio.style.display = 'none';
           audio.style.position = 'absolute';
           audio.style.left = '-9999px';
-          
-          audio.addEventListener('canplaythrough', () => {
-            console.log(`🎵 Musique ${objectType} préchargée en priorité pour POV_${povNumber}`);
-          });
+
 
           document.body.appendChild(audio);
         });
@@ -149,23 +142,6 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
     audio.style.display = 'none';
     audio.style.position = 'absolute';
     audio.style.left = '-9999px';
-    
-    audio.addEventListener('loadstart', () => {
-      console.log('🎵 Début préchargement musique principale');
-    });
-    
-    audio.addEventListener('loadedmetadata', () => {
-      console.log('🎵 Métadonnées musique principale chargées');
-    });
-    
-    audio.addEventListener('canplaythrough', () => {
-      console.log('🎵 Musique principale entièrement préchargée et prête');
-    });
-    
-    audio.addEventListener('error', (e) => {
-      console.error('❌ Erreur préchargement musique principale:', e);
-    });
-
     document.body.appendChild(audio);
   }, []);
 
@@ -182,22 +158,7 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
         audio.style.display = 'none';
         audio.style.position = 'absolute';
         audio.style.left = '-9999px';
-        
-        audio.addEventListener('loadstart', () => {
-          console.log(`🎵 Début préchargement musique ${objectType}`);
-        });
-        
-        audio.addEventListener('loadedmetadata', () => {
-          console.log(`🎵 Métadonnées musique ${objectType} chargées`);
-        });
-        
-        audio.addEventListener('canplaythrough', () => {
-          console.log(`🎵 Musique ${objectType} entièrement préchargée et prête`);
-        });
-        
-        audio.addEventListener('error', (e) => {
-          console.error(`❌ Erreur préchargement musique ${objectType}:`, e);
-        });
+      
 
         document.body.appendChild(audio);
       });
