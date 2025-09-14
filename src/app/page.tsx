@@ -21,6 +21,7 @@ export default function Home() {
   const [isLoadingComplete, setIsLoadingComplete] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [nextVideoSrc, setNextVideoSrc] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const [explanatoryVideo, setExplanatoryVideo] = useState<string | null>(null);
   const [showExplanatoryVideo, setShowExplanatoryVideo] = useState(false);
   const explanatoryVideoRef = useRef<HTMLVideoElement>(null);
@@ -74,13 +75,8 @@ export default function Home() {
     const outroUrl = getOptimizedVideoUrl("outro");
     setNextVideoSrc(outroUrl);
 
-    // Créer un élément vidéo temporaire pour précharger
-    const preloadVideo = document.createElement('video');
-    preloadVideo.src = outroUrl;
-    preloadVideo.preload = 'auto';
-    preloadVideo.load();
-
-    preloadVideo.addEventListener('canplaythrough', () => {
+    // Utiliser la fonction de préchargement optimisée pour mobile
+    preloadVideoForMobile(outroUrl).then(() => {
       // Une fois préchargée, faire la transition
       if (videoRef.current) {
         videoRef.current.src = outroUrl;
@@ -203,6 +199,42 @@ export default function Home() {
     fade();
   };
 
+  // Fonction de préchargement optimisée pour mobile
+  const preloadVideoForMobile = (videoUrl: string): Promise<void> => {
+    return new Promise((resolve) => {
+      if (isMobile) {
+        // Sur mobile, utiliser une approche plus agressive
+        const preloadVideo = document.createElement('video');
+        preloadVideo.src = videoUrl;
+        preloadVideo.preload = 'auto';
+        preloadVideo.muted = true; // Important pour mobile
+        preloadVideo.playsInline = true;
+        preloadVideo.style.display = 'none';
+        document.body.appendChild(preloadVideo);
+        
+        preloadVideo.addEventListener('loadeddata', () => {
+          // Attendre un peu plus sur mobile pour s'assurer que tout est chargé
+          setTimeout(() => {
+            document.body.removeChild(preloadVideo);
+            resolve();
+          }, 200);
+        });
+        
+        preloadVideo.load();
+      } else {
+        // Sur desktop, utiliser l'approche normale
+        const preloadVideo = document.createElement('video');
+        preloadVideo.src = videoUrl;
+        preloadVideo.preload = 'auto';
+        preloadVideo.load();
+        
+        preloadVideo.addEventListener('canplaythrough', () => {
+          resolve();
+        });
+      }
+    });
+  };
+
 
   const handleTransition = (direction: "left" | "right") => {
     let transitionVideo = "";
@@ -228,13 +260,8 @@ export default function Home() {
     const transitionUrl = getOptimizedVideoUrl(transitionVideo);
     setNextVideoSrc(transitionUrl);
 
-    // Créer un élément vidéo temporaire pour précharger
-    const preloadVideo = document.createElement('video');
-    preloadVideo.src = transitionUrl;
-    preloadVideo.preload = 'auto';
-    preloadVideo.load();
-
-    preloadVideo.addEventListener('canplaythrough', () => {
+    // Utiliser la fonction de préchargement optimisée pour mobile
+    preloadVideoForMobile(transitionUrl).then(() => {
       // Une fois préchargée, faire la transition
       if (videoRef.current) {
         videoRef.current.src = transitionUrl;
@@ -282,13 +309,8 @@ export default function Home() {
     const objetUrl = getOptimizedVideoUrl(objetVideo);
     setNextVideoSrc(objetUrl);
 
-    // Créer un élément vidéo temporaire pour précharger
-    const preloadVideo = document.createElement('video');
-    preloadVideo.src = objetUrl;
-    preloadVideo.preload = 'auto';
-    preloadVideo.load();
-
-    preloadVideo.addEventListener('canplaythrough', () => {
+    // Utiliser la fonction de préchargement optimisée pour mobile
+    preloadVideoForMobile(objetUrl).then(() => {
       // Une fois préchargée, faire la transition
       if (videoRef.current) {
         videoRef.current.src = objetUrl;
@@ -426,13 +448,8 @@ export default function Home() {
           const generiqueUrl = getOptimizedVideoUrl("generique");
           setNextVideoSrc(generiqueUrl);
 
-          // Créer un élément vidéo temporaire pour précharger
-          const preloadVideo = document.createElement('video');
-          preloadVideo.src = generiqueUrl;
-          preloadVideo.preload = 'auto';
-          preloadVideo.load();
-
-          preloadVideo.addEventListener('canplaythrough', () => {
+          // Utiliser la fonction de préchargement optimisée pour mobile
+          preloadVideoForMobile(generiqueUrl).then(() => {
             // Une fois préchargée, faire la transition
             if (videoRef.current) {
               videoRef.current.src = generiqueUrl;
@@ -551,8 +568,19 @@ export default function Home() {
     }
   };
 
-  // Effet typewriting pour "Chargement..."
+  // Détection mobile et effet typewriting pour "Chargement..."
   useEffect(() => {
+    // Détecter si on est sur mobile
+    const checkMobile = () => {
+      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                           window.innerWidth <= 768 ||
+                           ('ontouchstart' in window);
+      setIsMobile(isMobileDevice);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
     const text = "Chargement...";
     let currentIndex = 0;
     
@@ -570,7 +598,10 @@ export default function Home() {
       }
     }, 400); // Vitesse du typewriting plus lente (400ms par caractère)
 
-    return () => clearInterval(typeInterval);
+    return () => {
+      clearInterval(typeInterval);
+      window.removeEventListener('resize', checkMobile);
+    };
   }, []); // Se lance une seule fois au montage du composant
 
 
@@ -705,13 +736,8 @@ export default function Home() {
     const povUrl = getOptimizedVideoUrl(povVideo);
     setNextVideoSrc(povUrl);
 
-    // Créer un élément vidéo temporaire pour précharger
-    const preloadVideo = document.createElement('video');
-    preloadVideo.src = povUrl;
-    preloadVideo.preload = 'auto';
-    preloadVideo.load();
-
-    preloadVideo.addEventListener('canplaythrough', () => {
+    // Utiliser la fonction de préchargement optimisée pour mobile
+    preloadVideoForMobile(povUrl).then(() => {
       // Une fois préchargée, faire la transition
       if (videoRef.current) {
         // D'abord, on arrête la vidéo actuelle
@@ -806,6 +832,7 @@ export default function Home() {
           src={getOptimizedVideoUrl(currentVideo)}
           playsInline
           preload="auto"
+          muted={isMobile} // Important pour mobile
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
           style={{
@@ -813,8 +840,15 @@ export default function Home() {
             height: '100%',
             objectFit: 'cover',
             opacity: isPlaying && !isTransitioning ? 1 : 0,
-            transition: 'opacity 0.8s ease-in-out',
-            backgroundColor: 'transparent'
+            transition: isMobile ? 'opacity 1.2s ease-in-out' : 'opacity 0.8s ease-in-out',
+            backgroundColor: 'transparent',
+            // Propriétés spécifiques mobile
+            ...(isMobile && {
+              WebkitTransform: 'translateZ(0)',
+              transform: 'translateZ(0)',
+              backfaceVisibility: 'hidden',
+              perspective: '1000px'
+            })
           }}
         />
         {/* Audio pour la musique de fond */}
