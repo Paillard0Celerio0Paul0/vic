@@ -28,6 +28,7 @@ export default function Home() {
   const [gameCompleted, setGameCompleted] = useState(false);
   const [outroPlayed, setOutroPlayed] = useState(false);
   const [generiquePlayed, setGeneriquePlayed] = useState(false);
+  const [mainMusicPosition, setMainMusicPosition] = useState(0);
 
   // Fonction pour obtenir l'URL optimisée avec transformations Cloudinary
   const getOptimizedVideoUrl = (videoId: string) => {
@@ -275,6 +276,10 @@ export default function Home() {
     if (audioRef.current) {
       const objetType = zoneId;
       if (objectsWithMusic.includes(objetType)) {
+        // Sauvegarder la position actuelle de la musique principale
+        setMainMusicPosition(audioRef.current.currentTime);
+        console.log(`🎵 Position musique principale sauvegardée: ${audioRef.current.currentTime}s`);
+        
         // Si l'objet a une musique associée, on fait un fondu
         setIsFading(true);
         fadeAudio(audioRef.current, 0, 500); // Fade out sur 500ms
@@ -302,14 +307,17 @@ export default function Home() {
   // Gestionnaire pour vérifier le temps de la vidéo
   const handleTimeUpdate = () => {
     if (videoRef.current) {
-      // À 44 secondes de la vidéo d'introduction : lancer la musique et afficher le score
-      if (currentVideo === "introduction" && videoRef.current.currentTime >= 44 && audioRef.current) {
+      // À 39 secondes de la vidéo d'introduction : lancer la musique (5 secondes plus tôt)
+      if (currentVideo === "introduction" && videoRef.current.currentTime >= 40 && audioRef.current) {
         if (audioRef.current.paused) {
           audioRef.current.play();
           audioRef.current.volume = videoVolume;
-          console.log('🎵 Musique lancée à 44 secondes');
+          console.log('🎵 Musique lancée à 39 secondes');
         }
-        // Afficher le score à 44 secondes
+      }
+      
+      // À 44 secondes de la vidéo d'introduction : afficher le score
+      if (currentVideo === "introduction" && videoRef.current.currentTime >= 44) {
         if (!showScore) {
           setShowScore(true);
           console.log('📊 Score affiché à 44 secondes');
@@ -617,6 +625,14 @@ export default function Home() {
     setVideoType("introduction");
     setCurrentVideo("introduction");
 
+    // Reprendre la musique principale si elle était en pause
+    if (audioRef.current && audioRef.current.paused) {
+      audioRef.current.currentTime = mainMusicPosition;
+      audioRef.current.play();
+      audioRef.current.volume = videoVolume;
+      console.log(`🎵 Musique principale reprise à la position: ${mainMusicPosition}s`);
+    }
+
     // Enfin, on charge la vidéo d'introduction
     if (videoRef.current) {
       videoRef.current.src = getOptimizedVideoUrl("introduction");
@@ -666,7 +682,7 @@ export default function Home() {
     setCurrentVideo(povVideo);
     setVideoType("POV");
     
-    // Reprendre la musique principale avec un fondu
+    // Reprendre la musique principale avec un fondu à la position sauvegardée
     if (audioRef.current) {
       setIsFading(true);
       fadeAudio(audioRef.current, 0, 500); // Fade out sur 500ms
@@ -675,6 +691,11 @@ export default function Home() {
         if (audioRef.current) {
           audioRef.current.src = getOptimizedVideoUrl("main_song");
           audioRef.current.volume = 0;
+          
+          // Reprendre à la position sauvegardée
+          audioRef.current.currentTime = mainMusicPosition;
+          console.log(`🎵 Reprise musique principale à la position: ${mainMusicPosition}s`);
+          
           audioRef.current.play();
           fadeAudio(audioRef.current, videoVolume, 500); // Fade in sur 500ms
           setIsFading(false);

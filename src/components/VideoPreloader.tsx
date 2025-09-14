@@ -108,6 +108,25 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
       setTimeout(() => {
         preloadVideoSet(possibleTransitions);
       }, 500);
+      
+      // Précharger les musiques des objets de ce POV en priorité
+      setTimeout(() => {
+        const objectsWithMusic = ['boxe', 'foot', 'chien', 'jeuxvideo'];
+        objectsWithMusic.forEach(objectType => {
+          const audio = document.createElement('audio');
+          audio.preload = 'auto';
+          audio.src = getOptimizedVideoUrl(`${objectType}_song`);
+          audio.style.display = 'none';
+          audio.style.position = 'absolute';
+          audio.style.left = '-9999px';
+          
+          audio.addEventListener('canplaythrough', () => {
+            console.log(`🎵 Musique ${objectType} préchargée en priorité pour POV_${povNumber}`);
+          });
+
+          document.body.appendChild(audio);
+        });
+      }, 200);
     }
   };
 
@@ -125,14 +144,26 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
   // Préchargement de la musique principale
   useEffect(() => {
     const audio = document.createElement('audio');
-    audio.preload = 'metadata';
+    audio.preload = 'auto'; // Précharger complètement pour un démarrage instantané
     audio.src = getOptimizedVideoUrl('main_song');
     audio.style.display = 'none';
     audio.style.position = 'absolute';
     audio.style.left = '-9999px';
     
+    audio.addEventListener('loadstart', () => {
+      console.log('🎵 Début préchargement musique principale');
+    });
+    
     audio.addEventListener('loadedmetadata', () => {
-      console.log('Musique principale préchargée');
+      console.log('🎵 Métadonnées musique principale chargées');
+    });
+    
+    audio.addEventListener('canplaythrough', () => {
+      console.log('🎵 Musique principale entièrement préchargée et prête');
+    });
+    
+    audio.addEventListener('error', (e) => {
+      console.error('❌ Erreur préchargement musique principale:', e);
     });
 
     document.body.appendChild(audio);
@@ -142,22 +173,35 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
   useEffect(() => {
     const objectsWithMusic = ['boxe', 'foot', 'chien', 'jeuxvideo'];
     
+    // Précharger les musiques d'objets plus tôt pour un démarrage plus rapide
     setTimeout(() => {
       objectsWithMusic.forEach(objectType => {
         const audio = document.createElement('audio');
-        audio.preload = 'metadata';
+        audio.preload = 'auto'; // Précharger complètement au lieu de juste les métadonnées
         audio.src = getOptimizedVideoUrl(`${objectType}_song`);
         audio.style.display = 'none';
         audio.style.position = 'absolute';
         audio.style.left = '-9999px';
         
+        audio.addEventListener('loadstart', () => {
+          console.log(`🎵 Début préchargement musique ${objectType}`);
+        });
+        
         audio.addEventListener('loadedmetadata', () => {
-          console.log(`Musique ${objectType} préchargée`);
+          console.log(`🎵 Métadonnées musique ${objectType} chargées`);
+        });
+        
+        audio.addEventListener('canplaythrough', () => {
+          console.log(`🎵 Musique ${objectType} entièrement préchargée et prête`);
+        });
+        
+        audio.addEventListener('error', (e) => {
+          console.error(`❌ Erreur préchargement musique ${objectType}:`, e);
         });
 
         document.body.appendChild(audio);
       });
-    }, 2000);
+    }, 1000); // Réduit de 2000ms à 1000ms pour un préchargement plus rapide
   }, []);
 
   return null; // Ce composant ne rend rien visuellement
