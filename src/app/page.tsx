@@ -22,7 +22,7 @@ export default function Home() {
   const [explanatoryVideo, setExplanatoryVideo] = useState<string | null>(null);
   const [showExplanatoryVideo, setShowExplanatoryVideo] = useState(false);
   const explanatoryVideoRef = useRef<HTMLVideoElement>(null);
-  const [score, setScore] = useState(9);
+  const [score, setScore] = useState(0);
   const [validatedObjects, setValidatedObjects] = useState<Set<string>>(new Set());
   const [showScore, setShowScore] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
@@ -782,7 +782,7 @@ export default function Home() {
       
             {/* Affichage du score */}
             {showScore && (
-              <div className="absolute top-8 right-8 text-right z-20">
+              <div className="absolute top-16 right-8 text-center z-20">
                 <div className="text-pink-500 text-2xl font-bold dogica-pink">
                   Score
                 </div>
@@ -909,7 +909,7 @@ export default function Home() {
                   
                   handleReturnToPOV();
                 }}
-                className="absolute bottom-8 right-8 p-8 transition-all hover:scale-105 flex items-center justify-center"
+                className="absolute bottom-16 right-8 p-8 transition-all hover:scale-105 flex items-center justify-center"
               >
                 <img 
                   src="/icons/fleche-right.svg" 
