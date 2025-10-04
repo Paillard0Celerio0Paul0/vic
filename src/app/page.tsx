@@ -67,10 +67,8 @@ export default function Home() {
 
   // Fonction pour lancer la séquence de fin
   const launchEndSequence = () => {
-    console.log("🎬 launchEndSequence appelée - Début de la séquence de fin");
     setCurrentVideo("outro");
     setVideoType("outro");
-    console.log("🎬 État mis à jour: currentVideo=outro, videoType=outro");
     
     // Arrêter la musique principale pendant la séquence de fin
     if (audioRef.current) {
@@ -81,30 +79,26 @@ export default function Home() {
     // Précharger la vidéo outro pour éviter les flashes
     setIsTransitioning(true);
     const outroUrl = getBlobUrl("outro");
-    console.log("🎬 URL outro pour préchargement:", outroUrl);
     setNextVideoSrc(outroUrl);
-
-    // Préchargement direct pour outro
-    console.log("🎬 Début du préchargement d'outro");
     // Remplacer preloadVideoForMobile par un chargement direct
     (() => {
       // Une fois préchargée, faire la transition
       if (videoRef.current) {
-        console.log("🎬 videoRef.current existe, configuration de la vidéo outro");
+      
         videoRef.current.src = outroUrl;
-        console.log("🎬 src défini sur:", videoRef.current.src);
+      
         videoRef.current.volume = 1.0; // Volume maximum pour la vidéo finale
         videoRef.current.muted = false; // S'assurer que le son n'est pas coupé
-        console.log("🎬 Appel de videoRef.current.load()");
+     
         videoRef.current.load();
-        console.log("🎬 load() appelé, attente de onloadeddata");
+       
         videoRef.current.onloadeddata = () => {
-          console.log("🎬 onloadeddata déclenché pour outro");
+       
           if (videoRef.current) {
-            console.log("🎬 Lancement de la lecture d'outro");
+           
             videoRef.current.play()
               .then(() => {
-                console.log("🎬 Vidéo outro lancée avec succès");
+            
                 setIsTransitioning(false);
                 setNextVideoSrc(null);
                 
@@ -474,11 +468,9 @@ export default function Home() {
           // Précharger la vidéo générique pour éviter les flashes
           setIsTransitioning(true);
           const generiqueUrl = getBlobUrl("generique");
-          console.log("🎬 URL generique pour préchargement:", generiqueUrl);
           setNextVideoSrc(generiqueUrl);
 
           // Préchargement direct pour generique
-          console.log("🎬 Début du préchargement de generique");
           // Remplacer preloadVideoForMobile par un chargement direct
           (() => {
             // Une fois préchargée, faire la transition
