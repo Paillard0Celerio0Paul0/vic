@@ -532,6 +532,7 @@ export default function Home() {
     if (videoRef.current && audioRef.current) {
       if (currentVideo === "introduction") {
         videoRef.current.volume = volume;
+        videoRef.current.muted = false; // Important pour mobile
       } else {
         fadeAudio(audioRef.current, volume, 300); // Fade plus court pour le contrôle du volume
       }
@@ -564,6 +565,7 @@ export default function Home() {
       // Si c'est la vidéo d'introduction, on active son audio
       if (currentVideo === "introduction") {
         videoRef.current.volume = videoVolume;
+        videoRef.current.muted = false; // Important pour mobile
         audioRef.current.pause();
       } else {
         videoRef.current.volume = 0;
@@ -792,6 +794,7 @@ export default function Home() {
     if (videoRef.current && audioRef.current) {
       if (currentVideo === "introduction") {
         videoRef.current.volume = videoVolume;
+        videoRef.current.muted = false; // Important pour mobile
         audioRef.current.pause();
       } else if (currentVideo === "outro") {
         // Pour la vidéo outro, garder le son de la vidéo et arrêter la musique
@@ -837,13 +840,13 @@ export default function Home() {
           src={getOptimizedVideoUrlWithRange(currentVideo)}
           playsInline
           preload="auto"
-          muted={isMobile} // Important pour mobile
+          muted={isMobile && currentVideo !== "introduction"} // Important pour mobile, sauf introduction
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
           style={{
             width: '100%',
             height: '100%',
-            objectFit: 'cover',
+            objectFit: isMobile ? 'contain' : 'cover', // contain sur mobile pour éviter le rognage
             opacity: isPlaying && !isTransitioning ? 1 : 0,
             transition: isMobile ? 'opacity 1.2s ease-in-out' : 'opacity 0.8s ease-in-out',
             backgroundColor: 'transparent',
@@ -875,7 +878,7 @@ export default function Home() {
             style={{
               width: '100%',
               height: '100%',
-              objectFit: 'cover',
+              objectFit: isMobile ? 'contain' : 'cover', // contain sur mobile pour éviter le rognage
               zIndex: 15, // Plus élevé que la vidéo principale (zIndex: 0)
               opacity: 1,
               transition: 'opacity 0.5s ease-in-out',
@@ -917,11 +920,11 @@ export default function Home() {
       
             {/* Affichage du score */}
             {showScore && (
-              <div className="absolute top-4 right-4 sm:top-8 sm:right-8 md:top-16 md:right-8 text-center z-20 p-2 sm:p-3 md:p-4">
-                <div className="text-pink-500 text-lg sm:text-xl md:text-2xl font-bold dogica-pink">
+              <div className="absolute top-2 right-2 sm:top-8 sm:right-8 md:top-16 md:right-8 text-center z-20 p-1 sm:p-3 md:p-4">
+                <div className="text-pink-500 text-xs sm:text-xl md:text-2xl font-bold dogica-pink">
                   Score
                 </div>
-                <div className="text-white text-sm sm:text-base md:text-lg dogica-white">
+                <div className="text-white text-xs sm:text-base md:text-lg dogica-white">
                   {score} / 10
                 </div>
               
