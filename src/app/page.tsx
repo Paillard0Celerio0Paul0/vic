@@ -26,15 +26,16 @@ export default function Home() {
   const [explanatoryVideo, setExplanatoryVideo] = useState<string | null>(null);
   const [showExplanatoryVideo, setShowExplanatoryVideo] = useState(false);
   const explanatoryVideoRef = useRef<HTMLVideoElement>(null);
-  const [score, setScore] = useState(0);
+  const [score, setScore] = useState(9);
   const [validatedObjects, setValidatedObjects] = useState<Set<string>>(new Set());
   const [showScore, setShowScore] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
   const [outroPlayed, setOutroPlayed] = useState(false);
   const [generiquePlayed, setGeneriquePlayed] = useState(false);
   const [mainMusicPosition, setMainMusicPosition] = useState(0);
+  const [introductionUrl] = useState("https://ntpqkpm4vpvltypf.public.blob.vercel-storage.com/introduction");
 
-  // Fonction pour obtenir l'URL optimisée avec transformations Cloudinary
+  // Fonction pour obtenir l'URL optimisée avec Vercel Blob
 
   // Fonction pour tester si une vidéo explicative existe
   const testExplanatoryVideo = (videoId: string) => {
@@ -66,8 +67,10 @@ export default function Home() {
 
   // Fonction pour lancer la séquence de fin
   const launchEndSequence = () => {
+    console.log("🎬 launchEndSequence appelée - Début de la séquence de fin");
     setCurrentVideo("outro");
     setVideoType("outro");
+    console.log("🎬 État mis à jour: currentVideo=outro, videoType=outro");
     
     // Arrêter la musique principale pendant la séquence de fin
     if (audioRef.current) {
@@ -77,21 +80,31 @@ export default function Home() {
     
     // Précharger la vidéo outro pour éviter les flashes
     setIsTransitioning(true);
-    const outroUrl = getOptimizedVideoUrl("outro");
+    const outroUrl = getBlobUrl("outro");
+    console.log("🎬 URL outro pour préchargement:", outroUrl);
     setNextVideoSrc(outroUrl);
 
-    // Utiliser la fonction de préchargement optimisée pour mobile
-    preloadVideoForMobile(outroUrl).then(() => {
+    // Préchargement direct pour outro
+    console.log("🎬 Début du préchargement d'outro");
+    // Remplacer preloadVideoForMobile par un chargement direct
+    (() => {
       // Une fois préchargée, faire la transition
       if (videoRef.current) {
+        console.log("🎬 videoRef.current existe, configuration de la vidéo outro");
         videoRef.current.src = outroUrl;
+        console.log("🎬 src défini sur:", videoRef.current.src);
         videoRef.current.volume = 1.0; // Volume maximum pour la vidéo finale
         videoRef.current.muted = false; // S'assurer que le son n'est pas coupé
+        console.log("🎬 Appel de videoRef.current.load()");
         videoRef.current.load();
+        console.log("🎬 load() appelé, attente de onloadeddata");
         videoRef.current.onloadeddata = () => {
+          console.log("🎬 onloadeddata déclenché pour outro");
           if (videoRef.current) {
+            console.log("🎬 Lancement de la lecture d'outro");
             videoRef.current.play()
               .then(() => {
+                console.log("🎬 Vidéo outro lancée avec succès");
                 setIsTransitioning(false);
                 setNextVideoSrc(null);
                 
@@ -103,7 +116,7 @@ export default function Home() {
                 // Après 6 secondes, lancer outro_song en parallèle
                 setTimeout(() => {
                   if (audioRef.current) {
-                    audioRef.current.src = getOptimizedVideoUrl("outro_song");
+                    audioRef.current.src = getBlobUrl("outro_song");
                     audioRef.current.volume = videoVolume;
                     audioRef.current.loop = false; // Ne pas boucler la musique outro
                     audioRef.current.play();
@@ -111,6 +124,7 @@ export default function Home() {
                 }, 6000); // 6 secondes après le démarrage de outro
               })
               .catch((error) => {
+                console.error("❌ Erreur lors du lancement de la vidéo outro:", error);
                 if (error.name === 'AbortError') {
                   return;
                 }
@@ -120,7 +134,7 @@ export default function Home() {
           }
         };
       }
-    });
+    })();
     
     setOutroPlayed(true);
     setVideoEnded(false);
@@ -280,6 +294,12 @@ export default function Home() {
     const explanatoryVideoId = `text_${zoneId}`;
     setExplanatoryVideo(explanatoryVideoId);
     setShowExplanatoryVideo(false);
+    
+    // Forcer la réinitialisation de la vidéo explicative
+    if (explanatoryVideoRef.current) {
+      explanatoryVideoRef.current.pause();
+      explanatoryVideoRef.current.currentTime = 0;
+    }
 
     // Précharger la vidéo objet pour éviter les flashes
     setIsTransitioning(true);
@@ -328,7 +348,7 @@ export default function Home() {
         // Après le fade out, on change la source et on fait un fade in
         setTimeout(() => {
           if (audioRef.current) {
-            audioRef.current.src = getOptimizedVideoUrl(`${objetType}_song`);
+            audioRef.current.src = getBlobUrl(`${objetType}_song`);
             audioRef.current.volume = 0;
             audioRef.current.play();
             fadeAudio(audioRef.current, videoVolume, 500); // Fade in sur 500ms
@@ -367,10 +387,21 @@ export default function Home() {
       if (currentVideo === "introduction" && videoRef.current.currentTime >= 68) {
         setVideoType("lit");
         setCurrentVideo("lit_vers_1" as any);
+        // Ne pas modifier src ici, laisser le JSX gérer le changement
         if (videoRef.current) {
-          videoRef.current.src = getOptimizedVideoUrl("lit_vers_1");
           videoRef.current.volume = 0; // Pas de son pour les vidéos lit
-          videoRef.current.load();
+          // Attendre que le JSX mette à jour le src, puis charger
+          setTimeout(() => {
+            if (videoRef.current) {
+              videoRef.current.load();
+              // Lancer la lecture après le chargement
+              videoRef.current.addEventListener('loadeddata', () => {
+                if (videoRef.current) {
+                  videoRef.current.play().catch(console.error);
+                }
+              }, { once: true });
+            }
+          }, 100);
         }
         setVideoEnded(false);
       }
@@ -392,9 +423,19 @@ export default function Home() {
         setCurrentVideo("POV_1");
         setVideoType("POV");
         if (videoRef.current) {
-          videoRef.current.src = getOptimizedVideoUrl("POV_1");
           videoRef.current.volume = 0; // Pas de son pour les vidéos POV
-          videoRef.current.load();
+          // Attendre que le JSX mette à jour le src, puis charger
+          setTimeout(() => {
+            if (videoRef.current) {
+              videoRef.current.load();
+              // Lancer la lecture après le chargement
+              videoRef.current.addEventListener('loadeddata', () => {
+                if (videoRef.current) {
+                  videoRef.current.play().catch(console.error);
+                }
+              }, { once: true });
+            }
+          }, 100);
         }
         setVideoEnded(false);
       }
@@ -405,9 +446,19 @@ export default function Home() {
         setNextPOV(null);
         setVideoType("POV");
         if (videoRef.current) {
-          videoRef.current.src = getOptimizedVideoUrl(nextPOV);
           videoRef.current.volume = 0;
-          videoRef.current.load();
+          // Attendre que le JSX mette à jour le src, puis charger
+          setTimeout(() => {
+            if (videoRef.current) {
+              videoRef.current.load();
+              // Lancer la lecture après le chargement
+              videoRef.current.addEventListener('loadeddata', () => {
+                if (videoRef.current) {
+                  videoRef.current.play().catch(console.error);
+                }
+              }, { once: true });
+            }
+          }, 100);
         }
       }
       // Séquence de fin de jeu
@@ -422,11 +473,14 @@ export default function Home() {
           
           // Précharger la vidéo générique pour éviter les flashes
           setIsTransitioning(true);
-          const generiqueUrl = getOptimizedVideoUrl("generique");
+          const generiqueUrl = getBlobUrl("generique");
+          console.log("🎬 URL generique pour préchargement:", generiqueUrl);
           setNextVideoSrc(generiqueUrl);
 
-          // Utiliser la fonction de préchargement optimisée pour mobile
-          preloadVideoForMobile(generiqueUrl).then(() => {
+          // Préchargement direct pour generique
+          console.log("🎬 Début du préchargement de generique");
+          // Remplacer preloadVideoForMobile par un chargement direct
+          (() => {
             // Une fois préchargée, faire la transition
             if (videoRef.current) {
               videoRef.current.src = generiqueUrl;
@@ -450,7 +504,7 @@ export default function Home() {
                 }
               };
             }
-          });
+          })();
           
           setGeneriquePlayed(true);
           setVideoEnded(false);
@@ -474,20 +528,19 @@ export default function Home() {
         const objetType = currentVideo.replace("objet_", "");
         const timing = explanatoryVideoTimings[objetType as keyof typeof explanatoryVideoTimings];
         
+        
         // Déclencher la vidéo explicative au bon timing
-        if (timing && videoRef.current.currentTime >= timing && !showExplanatoryVideo && explanatoryVideo) {
+        if (timing && videoRef.current.currentTime >= timing && explanatoryVideo) {
+      
           
-          // Tester d'abord si la vidéo explicative existe
-          testExplanatoryVideo(explanatoryVideo);
-          
-          setShowExplanatoryVideo(true);
-          
-          // Vérifier que la vidéo objet continue de jouer
-          
-          // Charger la vidéo explicative (le démarrage se fera automatiquement via onCanPlay)
-          if (explanatoryVideoRef.current) {
-            explanatoryVideoRef.current.src = getOptimizedVideoUrlNoRange(explanatoryVideo);
-            explanatoryVideoRef.current.load();
+          if (!showExplanatoryVideo) {
+            setShowExplanatoryVideo(true);
+            
+            // Charger la vidéo explicative (le démarrage se fera automatiquement via onCanPlay)
+            if (explanatoryVideoRef.current) {
+              // Ne pas modifier src ici, laisser le JSX gérer le changement
+              explanatoryVideoRef.current.load();
+            }
           }
         }
         // Vérifier si la vidéo objet est terminée
@@ -564,7 +617,7 @@ export default function Home() {
     let currentIndex = 0;
     
     // Test de l'URL de la vidéo d'introduction (éviter le log multiple)
-    const introUrl = getBlobUrl("introduction") || `https://res.cloudinary.com/dpqjlqwcq/video/upload/introduction?v=v3`;
+    const introUrl = introductionUrl;
     
     const typeInterval = setInterval(() => {
       if (currentIndex <= text.length) {
@@ -647,7 +700,7 @@ export default function Home() {
 
     // Enfin, on charge la vidéo d'introduction (éviter le log multiple)
     if (videoRef.current) {
-      videoRef.current.src = getBlobUrl("introduction") || `https://res.cloudinary.com/dpqjlqwcq/video/upload/introduction?v=v3`;
+      videoRef.current.src = introductionUrl;
       videoRef.current.currentTime = videoEndTimes.introduction;
       videoRef.current.volume = 0;
       videoRef.current.pause();
@@ -690,6 +743,23 @@ export default function Home() {
     setCurrentVideo(povVideo);
     setVideoType("POV");
     
+    // Charger et lancer la vidéo POV
+    if (videoRef.current) {
+      videoRef.current.volume = 0; // Pas de son pour les vidéos POV
+      // Attendre que le JSX mette à jour le src, puis charger
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.load();
+          // Lancer la lecture après le chargement
+          videoRef.current.addEventListener('loadeddata', () => {
+            if (videoRef.current) {
+              videoRef.current.play().catch(console.error);
+            }
+          }, { once: true });
+        }
+      }, 100);
+    }
+    
     // Reprendre la musique principale avec un fondu à la position sauvegardée
     if (audioRef.current) {
       setIsFading(true);
@@ -697,7 +767,10 @@ export default function Home() {
 
       setTimeout(() => {
         if (audioRef.current) {
-          audioRef.current.src = getOptimizedVideoUrl("main_song");
+          // Ne pas recharger la source si c'est déjà main_song
+          if (audioRef.current.src !== getBlobUrl("main_song")) {
+            audioRef.current.src = getBlobUrl("main_song");
+          }
           audioRef.current.volume = 0;
           
           // Reprendre à la position sauvegardée
@@ -820,9 +893,16 @@ export default function Home() {
         <video
           ref={videoRef}
           className="w-full h-full object-cover pointer-events-none"
-          src={getOptimizedVideoUrlWithRange(currentVideo)}
+          src={
+            currentVideo === "introduction" 
+              ? introductionUrl 
+              : currentVideo === "outro" || currentVideo === "generique"
+              ? getBlobUrl(currentVideo)
+              : getOptimizedVideoUrlWithRange(currentVideo)
+          }
           playsInline
-          preload="none"
+          preload={currentVideo === "outro" || currentVideo === "generique" ? "metadata" : "none"}
+          crossOrigin="anonymous"
           muted={isMobile && currentVideo !== "introduction"} // Important pour mobile, sauf introduction
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
@@ -845,19 +925,23 @@ export default function Home() {
         {/* Audio pour la musique de fond */}
         <audio
           ref={audioRef}
-          src={getBlobUrl("main_song") || `https://res.cloudinary.com/dpqjlqwcq/video/upload/main_song?v=v3&_a=A`}
+          src={getBlobUrl("main_song")}
           loop
           preload="none"
+          crossOrigin="anonymous"
         />
         
         {/* Vidéo explicative superposée */}
-        {showExplanatoryVideo && explanatoryVideo && (
-          <video
-            ref={explanatoryVideoRef}
-            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-            src={getOptimizedVideoUrlNoRange(explanatoryVideo)}
-            playsInline
-            preload="none"
+        {showExplanatoryVideo && explanatoryVideo && (() => {
+          const videoUrl = getOptimizedVideoUrlNoRange(explanatoryVideo);
+          return (
+            <video
+              ref={explanatoryVideoRef}
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              src={videoUrl}
+              playsInline
+              preload="metadata"
+              crossOrigin="anonymous"
             style={{
               width: '100%',
               height: '100%',
@@ -871,18 +955,14 @@ export default function Home() {
               // Ou utilisez 'screen' pour éclaircir
               // Ou 'overlay' pour un effet différent
             }}
-            onLoadStart={() => {
-            }}
-            onLoadedMetadata={() => {
-            }}
             onCanPlay={() => {
-              
               // Démarrer automatiquement la vidéo explicative
               if (explanatoryVideoRef.current) {
                 explanatoryVideoRef.current.play()
                   .then(() => {
                   })
                   .catch((error) => {
+                    console.error(`❌ Erreur lancement vidéo explicative ${explanatoryVideo}:`, error);
                     if (error.name === 'AbortError') {
                       return;
                     }
@@ -898,7 +978,8 @@ export default function Home() {
               // setExplanatoryVideo(null);
             }}
           />
-        )}
+          );
+        })()}
         
 
       

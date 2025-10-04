@@ -11,9 +11,9 @@ export const getOptimizedVideoUrl = (videoId) => {
     return blobUrl;
   }
   
-  // Fallback vers Cloudinary si le fichier n'est pas encore migré
-  console.warn(`⚠️ Fichier ${videoId} non trouvé dans Vercel Blob, utilisation de Cloudinary`);
-  return `https://res.cloudinary.com/dpqjlqwcq/video/upload/${videoId}?v=v3`;
+  // Erreur si le fichier n'est pas trouvé dans Vercel Blob
+  console.error(`❌ Fichier ${videoId} non trouvé dans Vercel Blob`);
+  throw new Error(`Fichier ${videoId} non trouvé dans Vercel Blob`);
 };
 
 // Fonction pour obtenir l'URL avec gestion des Range Requests
@@ -24,9 +24,9 @@ export const getOptimizedVideoUrlWithRange = (videoId) => {
     return blobUrl;
   }
   
-  // Fallback vers Cloudinary avec paramètres pour éviter l'erreur 416
-  console.warn(`⚠️ Fichier ${videoId} non trouvé dans Vercel Blob, utilisation de Cloudinary`);
-  return `https://res.cloudinary.com/dpqjlqwcq/video/upload/${videoId}?v=v3&_a=A`;
+  // Erreur si le fichier n'est pas trouvé dans Vercel Blob
+  console.error(`❌ Fichier ${videoId} non trouvé dans Vercel Blob`);
+  throw new Error(`Fichier ${videoId} non trouvé dans Vercel Blob`);
 };
 
 // Fonction pour obtenir l'URL sans Range Requests (pour les vidéos problématiques)
@@ -36,9 +36,9 @@ export const getOptimizedVideoUrlNoRange = (videoId) => {
     return blobUrl;
   }
   
-  // Fallback vers Cloudinary
-  console.warn(`⚠️ Fichier ${videoId} non trouvé dans Vercel Blob, utilisation de Cloudinary`);
-  return `https://res.cloudinary.com/dpqjlqwcq/video/upload/${videoId}?v=v3`;
+  // Erreur si le fichier n'est pas trouvé dans Vercel Blob
+  console.error(`❌ Fichier ${videoId} non trouvé dans Vercel Blob`);
+  throw new Error(`Fichier ${videoId} non trouvé dans Vercel Blob`);
 };
 
 // Fonction pour vérifier si un fichier est disponible sur Vercel Blob

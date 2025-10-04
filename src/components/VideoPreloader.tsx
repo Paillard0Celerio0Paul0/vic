@@ -11,7 +11,7 @@ interface VideoPreloaderProps {
 const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
   const preloadedVideos = useRef<Set<string>>(new Set());
 
-  // Fonction pour obtenir l'URL optimisée avec transformations Cloudinary
+  // Fonction pour obtenir l'URL optimisée avec Vercel Blob
   // Fonction pour précharger une vidéo
   const preloadVideo = (videoId: string) => {
     if (preloadedVideos.current.has(videoId)) {
