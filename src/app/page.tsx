@@ -204,39 +204,11 @@ export default function Home() {
     fade();
   };
 
-  // Fonction de préchargement optimisée pour mobile
+  // Fonction de préchargement optimisée pour mobile - DÉSACTIVÉE pour économiser les coûts
   const preloadVideoForMobile = (videoUrl: string): Promise<void> => {
     return new Promise((resolve) => {
-      if (isMobile) {
-        // Sur mobile, utiliser une approche plus agressive
-        const preloadVideo = document.createElement('video');
-        preloadVideo.src = videoUrl;
-        preloadVideo.preload = 'auto';
-        preloadVideo.muted = true; // Important pour mobile
-        preloadVideo.playsInline = true;
-        preloadVideo.style.display = 'none';
-        document.body.appendChild(preloadVideo);
-        
-        preloadVideo.addEventListener('loadeddata', () => {
-          // Attendre un peu plus sur mobile pour s'assurer que tout est chargé
-          setTimeout(() => {
-            document.body.removeChild(preloadVideo);
-            resolve();
-          }, 200);
-        });
-        
-        preloadVideo.load();
-      } else {
-        // Sur desktop, utiliser l'approche normale
-        const preloadVideo = document.createElement('video');
-        preloadVideo.src = videoUrl;
-        preloadVideo.preload = 'auto';
-        preloadVideo.load();
-        
-        preloadVideo.addEventListener('canplaythrough', () => {
-          resolve();
-        });
-      }
+      // Préchargement désactivé - chargement direct
+      resolve();
     });
   };
 
@@ -825,8 +797,8 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-black">
-      {/* Préchargeur de vidéos */}
-      <VideoPreloader currentVideo={currentVideo} videoType={videoType} />
+      {/* Préchargeur de vidéos - DÉSACTIVÉ pour économiser les coûts Vercel */}
+      {/* <VideoPreloader currentVideo={currentVideo} videoType={videoType} /> */}
       
       {/* Vidéo en arrière-plan absolu */}
       <div className="absolute inset-0 w-full h-full overflow-hidden" style={{ zIndex: 0 }}>
@@ -850,7 +822,7 @@ export default function Home() {
           className="w-full h-full object-cover pointer-events-none"
           src={getOptimizedVideoUrlWithRange(currentVideo)}
           playsInline
-          preload="auto"
+          preload="none"
           muted={isMobile && currentVideo !== "introduction"} // Important pour mobile, sauf introduction
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
@@ -875,7 +847,7 @@ export default function Home() {
           ref={audioRef}
           src={getBlobUrl("main_song") || `https://res.cloudinary.com/dpqjlqwcq/video/upload/main_song?v=v3&_a=A`}
           loop
-          preload="auto"
+          preload="none"
         />
         
         {/* Vidéo explicative superposée */}
@@ -885,7 +857,7 @@ export default function Home() {
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             src={getOptimizedVideoUrlNoRange(explanatoryVideo)}
             playsInline
-            preload="auto"
+            preload="none"
             style={{
               width: '100%',
               height: '100%',
