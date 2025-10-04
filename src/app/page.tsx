@@ -932,11 +932,17 @@ export default function Home() {
       
             {/* Affichage du score */}
             {showScore && (
-              <div className="absolute top-1 right-1 sm:top-8 sm:right-8 md:top-16 md:right-8 text-center z-20 p-0.5 sm:p-3 md:p-4">
-                <div className="text-pink-500 text-xs sm:text-xl md:text-2xl font-bold dogica-pink">
+              <div 
+                className="absolute text-center z-20 p-0.5 sm:p-3 md:p-4"
+                style={{
+                  top: isMobile ? '4px' : '64px',
+                  right: isMobile ? '4px' : '32px'
+                }}
+              >
+                <div className="text-xs sm:text-xl md:text-2xl font-bold dogica-pink">
                   Score
                 </div>
-                <div className="text-white text-xs sm:text-base md:text-lg dogica-white">
+                <div className="text-xs sm:text-base md:text-lg dogica-white">
                   {score} / 10
                 </div>
               
