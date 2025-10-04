@@ -26,7 +26,7 @@ export default function Home() {
   const [explanatoryVideo, setExplanatoryVideo] = useState<string | null>(null);
   const [showExplanatoryVideo, setShowExplanatoryVideo] = useState(false);
   const explanatoryVideoRef = useRef<HTMLVideoElement>(null);
-  const [score, setScore] = useState(9);
+  const [score, setScore] = useState(0);
   const [validatedObjects, setValidatedObjects] = useState<Set<string>>(new Set());
   const [showScore, setShowScore] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
