@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import InteractiveZones from '../components/InteractiveZones';
 import VideoPreloader from '../components/VideoPreloader';
+import { getOptimizedVideoUrl, getOptimizedVideoUrlWithRange, getOptimizedVideoUrlNoRange, getBlobUrl } from '../utils/blobUrls';
 
 export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -34,17 +35,21 @@ export default function Home() {
   const [mainMusicPosition, setMainMusicPosition] = useState(0);
 
   // Fonction pour obtenir l'URL optimisée avec transformations Cloudinary
-  const getOptimizedVideoUrl = (videoId: string) => {
-    // URL simple sans transformations pour tester
-    // Si cela fonctionne, on pourra réajouter les transformations
-    const version = "v3"; // Changez ceci quand vous uploadez de nouvelles vidéos
-    return `https://res.cloudinary.com/dpqjlqwcq/video/upload/${videoId}?v=${version}`;
-  };
 
   // Fonction pour tester si une vidéo explicative existe
   const testExplanatoryVideo = (videoId: string) => {
+    // Vérifier d'abord si le fichier existe dans Vercel Blob
+    const blobUrl = getOptimizedVideoUrlNoRange(videoId);
+    
     const testVideo = document.createElement('video');
-    testVideo.src = getOptimizedVideoUrl(videoId);
+    testVideo.src = blobUrl;
+    testVideo.preload = 'metadata';
+    
+    
+    testVideo.addEventListener('error', (e) => {
+      console.error(`❌ Erreur chargement vidéo explicative ${videoId}:`, e);
+    });
+    
     testVideo.load();
   };
 
@@ -248,7 +253,7 @@ export default function Home() {
       transitionVideo = direction === "left" ? "2_vers_1" : "2_vers_3";
       nextVideo = direction === "left" ? "POV_1" : "POV_3";
     } else if (currentVideo === "POV_3") {
-      transitionVideo = direction === "left" ? "3_vers_2" : "3_vers_1";
+      transitionVideo = direction === "left" ? "3_vers_2" : "3_vers_2";
       nextVideo = direction === "left" ? "POV_2" : "POV_1";
     }
 
@@ -295,7 +300,7 @@ export default function Home() {
 
   // Gestionnaire pour les clics sur les zones interactives
   const handleZoneClick = (zoneId: string) => {
-    const objetVideo = `${zoneId}` as typeof currentVideo;
+    const objetVideo = `objet_${zoneId}` as typeof currentVideo;
     setCurrentVideo(objetVideo);
     setVideoType("objet");
     
@@ -509,7 +514,7 @@ export default function Home() {
           
           // Charger la vidéo explicative (le démarrage se fera automatiquement via onCanPlay)
           if (explanatoryVideoRef.current) {
-            explanatoryVideoRef.current.src = getOptimizedVideoUrl(explanatoryVideo);
+            explanatoryVideoRef.current.src = getOptimizedVideoUrlNoRange(explanatoryVideo);
             explanatoryVideoRef.current.load();
           }
         }
@@ -584,8 +589,8 @@ export default function Home() {
     const text = "Chargement...";
     let currentIndex = 0;
     
-    // Test de l'URL de la vidéo d'introduction
-    const introUrl = getOptimizedVideoUrl("introduction");
+    // Test de l'URL de la vidéo d'introduction (éviter le log multiple)
+    const introUrl = getBlobUrl("introduction") || `https://res.cloudinary.com/dpqjlqwcq/video/upload/introduction?v=v3`;
     
     const typeInterval = setInterval(() => {
       if (currentIndex <= text.length) {
@@ -666,9 +671,9 @@ export default function Home() {
       audioRef.current.volume = videoVolume;
     }
 
-    // Enfin, on charge la vidéo d'introduction
+    // Enfin, on charge la vidéo d'introduction (éviter le log multiple)
     if (videoRef.current) {
-      videoRef.current.src = getOptimizedVideoUrl("introduction");
+      videoRef.current.src = getBlobUrl("introduction") || `https://res.cloudinary.com/dpqjlqwcq/video/upload/introduction?v=v3`;
       videoRef.current.currentTime = videoEndTimes.introduction;
       videoRef.current.volume = 0;
       videoRef.current.pause();
@@ -829,7 +834,7 @@ export default function Home() {
         <video
           ref={videoRef}
           className="w-full h-full object-cover pointer-events-none"
-          src={getOptimizedVideoUrl(currentVideo)}
+          src={getOptimizedVideoUrlWithRange(currentVideo)}
           playsInline
           preload="auto"
           muted={isMobile} // Important pour mobile
@@ -854,7 +859,7 @@ export default function Home() {
         {/* Audio pour la musique de fond */}
         <audio
           ref={audioRef}
-          src={getOptimizedVideoUrl("main_song")}
+          src={getBlobUrl("main_song") || `https://res.cloudinary.com/dpqjlqwcq/video/upload/main_song?v=v3&_a=A`}
           loop
           preload="auto"
         />
@@ -864,7 +869,7 @@ export default function Home() {
           <video
             ref={explanatoryVideoRef}
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-            src={getOptimizedVideoUrl(explanatoryVideo)}
+            src={getOptimizedVideoUrlNoRange(explanatoryVideo)}
             playsInline
             preload="auto"
             style={{
@@ -898,6 +903,7 @@ export default function Home() {
               }
             }}
             onError={(e) => {
+              console.error(`❌ Erreur vidéo explicative ${explanatoryVideo}:`, e);
             }}
             onEnded={() => {
               // Ne pas masquer la vidéo, la laisser sur la dernière image
@@ -911,11 +917,11 @@ export default function Home() {
       
             {/* Affichage du score */}
             {showScore && (
-              <div className="absolute top-16 right-8 text-center z-20">
-                <div className="text-pink-500 text-2xl font-bold dogica-pink">
+              <div className="absolute top-4 right-4 sm:top-8 sm:right-8 md:top-16 md:right-8 text-center z-20 p-2 sm:p-3 md:p-4">
+                <div className="text-pink-500 text-lg sm:text-xl md:text-2xl font-bold dogica-pink">
                   Score
                 </div>
-                <div className="text-white text-lg dogica-white">
+                <div className="text-white text-sm sm:text-base md:text-lg dogica-white">
                   {score} / 10
                 </div>
               
@@ -995,16 +1001,20 @@ export default function Home() {
 
                 {/* POV_3 : Flèche gauche vers POV_2 */}
                 {currentVideo === "POV_3" && (
-                  <button
-                    onClick={() => handleTransition("left")}
-                    className="absolute left-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center"
-                  >
-                    <img 
-                      src="/icons/fleche-left.svg" 
-                      alt="Vers POV_2" 
-                      className="w-12 h-12 filter drop-shadow-lg hover:drop-shadow-xl transition-all" 
-                    />
-                  </button>
+                  <>
+                    {/* Flèche gauche vers POV_2 */}
+                    <button
+                      onClick={() => handleTransition("left")}
+                      className="absolute left-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center"
+                    >
+                      <img 
+                        src="/icons/fleche-left.svg" 
+                        alt="Vers POV_2" 
+                        className="w-12 h-12 filter drop-shadow-lg hover:drop-shadow-xl transition-all" 
+                      />
+                    </button>
+                    
+                  </>
                 )}
               </>
             )}

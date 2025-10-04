@@ -235,8 +235,6 @@ export const assignVimeoAccount = (videoId: string): string | null => {
   // Mettre à jour le compteur de vidéos
   VIMEO_ACCOUNTS[bestAccount.id].videoCount++;
   
-  console.log(`Vidéo ${videoId} assignée au compte ${bestAccount.name} (${bestAccount.videoCount}/${bestAccount.maxVideos})`);
-  
   return bestAccount.id;
 };
 
@@ -268,5 +266,4 @@ export const resetVimeoCounters = () => {
   Object.keys(VIMEO_ACCOUNTS).forEach(accountId => {
     VIMEO_ACCOUNTS[accountId].videoCount = 0;
   });
-  console.log('Compteurs Vimeo réinitialisés');
 };

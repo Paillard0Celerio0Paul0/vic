@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { getOptimizedVideoUrl, getOptimizedVideoUrlWithRange, getOptimizedVideoUrlNoRange, getBlobUrl } from '../utils/blobUrls';
 
 interface VideoPreloaderProps {
   currentVideo: string;
@@ -11,12 +12,6 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
   const preloadedVideos = useRef<Set<string>>(new Set());
 
   // Fonction pour obtenir l'URL optimisée avec transformations Cloudinary
-  const getOptimizedVideoUrl = (videoId: string) => {
-    // URL simple sans transformations pour tester
-    // Si cela fonctionne, on pourra réajouter les transformations
-    return `https://res.cloudinary.com/dpqjlqwcq/video/upload/${videoId}`;
-  };
-
   // Fonction pour précharger une vidéo
   const preloadVideo = (videoId: string) => {
     if (preloadedVideos.current.has(videoId)) {
@@ -25,7 +20,7 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
 
     const video = document.createElement('video');
     video.preload = 'metadata'; // Précharge les métadonnées et le début de la vidéo
-    video.src = getOptimizedVideoUrl(videoId);
+    video.src = getOptimizedVideoUrlNoRange(videoId);
     video.style.display = 'none';
     video.style.position = 'absolute';
     video.style.left = '-9999px';
@@ -56,7 +51,7 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
     const criticalVideos = ['introduction', 'POV_1', 'POV_2', 'POV_3'];
     
     // Vidéos de transition
-    const transitionVideos = ['1_vers_2', '1_vers_3', '2_vers_1', '2_vers_3', '3_vers_1', '3_vers_2'];
+    const transitionVideos = ['1_vers_2', '1_vers_3', '2_vers_1', '2_vers_3', '3_vers_2'];
     
     // Vidéos d'objets
     const objectVideos = [
@@ -66,7 +61,7 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
     ];
 
     // Vidéos de fin de jeu
-    const endGameVideos = ['OUTRO_dmozy4', 'generique'];
+    const endGameVideos = ['outro', 'generique'];
 
     // Précharger les vidéos critiques immédiatement
     preloadVideoSet(criticalVideos);
@@ -111,7 +106,7 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
         objectsWithMusic.forEach(objectType => {
           const audio = document.createElement('audio');
           audio.preload = 'auto';
-          audio.src = getOptimizedVideoUrl(`${objectType}_song`);
+          audio.src = getOptimizedVideoUrlNoRange(`${objectType}_song`);
           audio.style.display = 'none';
           audio.style.position = 'absolute';
           audio.style.left = '-9999px';
@@ -154,7 +149,7 @@ const VideoPreloader = ({ currentVideo, videoType }: VideoPreloaderProps) => {
       objectsWithMusic.forEach(objectType => {
         const audio = document.createElement('audio');
         audio.preload = 'auto'; // Précharger complètement au lieu de juste les métadonnées
-        audio.src = getOptimizedVideoUrl(`${objectType}_song`);
+        audio.src = getOptimizedVideoUrlNoRange(`${objectType}_song`);
         audio.style.display = 'none';
         audio.style.position = 'absolute';
         audio.style.left = '-9999px';
