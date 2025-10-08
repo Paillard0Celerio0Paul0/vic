@@ -530,11 +530,47 @@ ReferenceError: module is not defined in ES module scope
 
 ---
 
+## 🔧 Corrections finales (Session 10)
+
+### Problème Desktop - Vidéos objet ne se lancent pas
+**Cause** : Les clés dans `blob-urls.json` étaient `"velo"`, `"boxe"`, etc. mais le code cherchait `"objet_velo"`, `"objet_boxe"`, etc.
+
+**Solution** : Ajout des mappings manquants dans `blob-urls.json`
+```json
+"objet_velo": "https://.../velo.mp4",
+"objet_boxe": "https://.../boxe.mp4",
+// etc.
+```
+
+### Problème iOS - Vidéos ne se chargent toujours pas
+**Nouvelle approche** : Utiliser `loadedmetadata` au lieu de `canplay`
+
+**Changements** :
+1. ✅ Écoute de `loadedmetadata` (se déclenche plus tôt sur Safari)
+2. ✅ Écoute de `canplay` en fallback
+3. ✅ Logs détaillés d'erreur (error.code, error.message, readyState, networkState)
+4. ✅ Timeout augmenté à 15 secondes
+
+**Logs attendus sur iOS** :
+```
+⏳ Attente chargement métadonnées...
+✅ Métadonnées chargées (loadedmetadata), readyState: 1
+▶️ Tentative play (muted)...
+✅ Lecture réussie
+```
+
+Si erreur :
+```
+❌ Erreur chargement vidéo: { error, code, message, readyState, networkState }
+```
+
+---
+
 ## 🔄 Prochaines étapes
 
-1. **Re-déployer** sur Vercel (le build devrait maintenant fonctionner)
-2. **Uploader les vidéos** avec `npm run upload-videos`
-3. **Retester sur iPad/iPhone** après upload avec les nouveaux Content-Types
+1. **Tester sur Desktop** : Les vidéos objet devraient maintenant fonctionner
+2. **Tester sur iPad/iPhone** : Observer les nouveaux logs détaillés
+3. Si `loadedmetadata` ne se déclenche pas → Le problème est le Content-Type sur Vercel Blob (vérifier avec curl)
 
 ---
 

@@ -105,25 +105,46 @@ export default function Home() {
         console.log("⏳ Attente chargement métadonnées...");
         await new Promise<void>((resolve, reject) => {
           const timeout = setTimeout(() => {
+            console.error("❌ Timeout - readyState:", videoRef.current?.readyState, "networkState:", videoRef.current?.networkState);
             reject(new Error("Timeout chargement vidéo"));
-          }, 10000); // 10 secondes max
+          }, 15000); // 15 secondes max
+          
+          const onLoadedMetadata = () => {
+            clearTimeout(timeout);
+            console.log("✅ Métadonnées chargées (loadedmetadata), readyState:", videoRef.current?.readyState);
+            cleanup();
+            resolve();
+          };
           
           const onCanPlay = () => {
             clearTimeout(timeout);
-            console.log("✅ Métadonnées chargées, readyState:", videoRef.current?.readyState);
-            videoRef.current?.removeEventListener('canplay', onCanPlay);
-            videoRef.current?.removeEventListener('error', onError);
+            console.log("✅ Vidéo prête (canplay), readyState:", videoRef.current?.readyState);
+            cleanup();
             resolve();
           };
           
           const onError = (e: Event) => {
             clearTimeout(timeout);
-            console.error("❌ Erreur chargement vidéo:", e);
-            videoRef.current?.removeEventListener('canplay', onCanPlay);
-            videoRef.current?.removeEventListener('error', onError);
-            reject(new Error("Erreur chargement vidéo"));
+            const target = e.target as HTMLVideoElement;
+            console.error("❌ Erreur chargement vidéo:", {
+              error: target.error,
+              code: target.error?.code,
+              message: target.error?.message,
+              readyState: target.readyState,
+              networkState: target.networkState
+            });
+            cleanup();
+            reject(new Error(`Erreur chargement: ${target.error?.message || 'unknown'}`));
           };
           
+          const cleanup = () => {
+            videoRef.current?.removeEventListener('loadedmetadata', onLoadedMetadata);
+            videoRef.current?.removeEventListener('canplay', onCanPlay);
+            videoRef.current?.removeEventListener('error', onError);
+          };
+          
+          // Écouter loadedmetadata (se déclenche plus tôt que canplay sur Safari)
+          videoRef.current?.addEventListener('loadedmetadata', onLoadedMetadata);
           videoRef.current?.addEventListener('canplay', onCanPlay);
           videoRef.current?.addEventListener('error', onError);
           videoRef.current?.load();
