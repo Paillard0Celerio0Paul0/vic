@@ -102,15 +102,19 @@ export default function Home() {
         videoRef.current.src = videoUrl;
         
         // Attendre que la vidéo soit prête avant de play()
+        setDebugMessage("⏳ Attente métadonnées...");
         console.log("⏳ Attente chargement métadonnées...");
         await new Promise<void>((resolve, reject) => {
           const timeout = setTimeout(() => {
+            const state = `RS:${videoRef.current?.readyState} NS:${videoRef.current?.networkState}`;
+            setDebugMessage(`❌ Timeout ${state}`);
             console.error("❌ Timeout - readyState:", videoRef.current?.readyState, "networkState:", videoRef.current?.networkState);
             reject(new Error("Timeout chargement vidéo"));
           }, 15000); // 15 secondes max
           
           const onLoadedMetadata = () => {
             clearTimeout(timeout);
+            setDebugMessage("✅ Métadonnées OK");
             console.log("✅ Métadonnées chargées (loadedmetadata), readyState:", videoRef.current?.readyState);
             cleanup();
             resolve();
@@ -118,6 +122,7 @@ export default function Home() {
           
           const onCanPlay = () => {
             clearTimeout(timeout);
+            setDebugMessage("✅ Vidéo prête");
             console.log("✅ Vidéo prête (canplay), readyState:", videoRef.current?.readyState);
             cleanup();
             resolve();
@@ -126,15 +131,21 @@ export default function Home() {
           const onError = (e: Event) => {
             clearTimeout(timeout);
             const target = e.target as HTMLVideoElement;
+            const errorCode = target.error?.code || 0;
+            const errorMsg = target.error?.message || 'Unknown';
+            const errorNames = ['', 'ABORTED', 'NETWORK', 'DECODE', 'SRC_NOT_SUPPORTED'];
+            const errorName = errorNames[errorCode] || `CODE_${errorCode}`;
+            
+            setDebugMessage(`❌ ${errorName}: ${errorMsg.substring(0, 30)}`);
             console.error("❌ Erreur chargement vidéo:", {
               error: target.error,
-              code: target.error?.code,
-              message: target.error?.message,
+              code: errorCode,
+              message: errorMsg,
               readyState: target.readyState,
               networkState: target.networkState
             });
             cleanup();
-            reject(new Error(`Erreur chargement: ${target.error?.message || 'unknown'}`));
+            reject(new Error(`Erreur ${errorName}: ${errorMsg}`));
           };
           
           const cleanup = () => {
@@ -151,28 +162,32 @@ export default function Home() {
         });
         
         try {
+          setDebugMessage("▶️ Lecture...");
           console.log("▶️ Tentative play (muted)...");
           await videoRef.current.play();
           console.log("✅ Lecture réussie");
-          setDebugMessage("✅ Lecture OK");
           
           // Unmute après démarrage si la vidéo a besoin de son
           if (needsSound) {
+            setDebugMessage("🔊 Activation son...");
             console.log("🔊 Unmute dans 200ms...");
             setTimeout(() => {
               if (videoRef.current) {
                 console.log("🔊 Activation du son");
                 videoRef.current.muted = false;
                 videoRef.current.volume = 1.0;
-                setDebugMessage("");
+                setDebugMessage("✅ OK");
+                setTimeout(() => setDebugMessage(""), 2000);
               }
             }, 200);
           } else {
+            setDebugMessage("✅ OK");
             setTimeout(() => setDebugMessage(""), 2000);
           }
         } catch (error) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          setDebugMessage(`❌ Play: ${errMsg.substring(0, 30)}`);
           console.error("❌ Erreur play:", error);
-          setDebugMessage("❌ Erreur: " + (error instanceof Error ? error.message : String(error)));
           throw error;
         }
       } else {
@@ -1252,9 +1267,21 @@ export default function Home() {
               />
             )}
 
-            {/* Message de debug (iPad uniquement) */}
+            {/* Message de debug (Safari/iOS uniquement) */}
             {debugMessage && (isSafari || isIOS) && (
-              <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 text-white px-4 py-2 rounded-lg z-50 font-mono text-sm">
+              <div 
+                className="fixed top-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg z-50 font-mono text-sm max-w-[90vw] text-center"
+                style={{
+                  backgroundColor: debugMessage.includes('❌') ? 'rgba(220, 38, 38, 0.9)' : 
+                                  debugMessage.includes('✅') ? 'rgba(34, 197, 94, 0.9)' :
+                                  debugMessage.includes('⏳') ? 'rgba(59, 130, 246, 0.9)' :
+                                  'rgba(0, 0, 0, 0.8)',
+                  color: 'white',
+                  fontSize: '12px',
+                  lineHeight: '1.4',
+                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
+                }}
+              >
                 {debugMessage}
               </div>
             )}

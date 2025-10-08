@@ -566,11 +566,43 @@ Si erreur :
 
 ---
 
+## 📱 Messages de debug visibles (Session 11)
+
+### Problème
+L'utilisateur n'a pas accès à la console Safari pour le debug.
+
+### Solution
+Tous les messages importants sont maintenant affichés **directement sur le site** en haut de l'écran.
+
+**Messages affichés** (visibles sur Safari/iOS uniquement) :
+
+| Étape | Message | Couleur |
+|-------|---------|---------|
+| Chargement | `⏳ Attente métadonnées...` | 🔵 Bleu |
+| Succès métadonnées | `✅ Métadonnées OK` | 🟢 Vert |
+| Lecture | `▶️ Lecture...` | ⚫ Noir |
+| Activation son | `🔊 Activation son...` | ⚫ Noir |
+| Succès | `✅ OK` | 🟢 Vert |
+| Timeout | `❌ Timeout RS:0 NS:3` | 🔴 Rouge |
+| Erreur | `❌ SRC_NOT_SUPPORTED: Format error` | 🔴 Rouge |
+
+**Codes d'erreur affichés** :
+- `ABORTED` (code 1) = Chargement annulé
+- `NETWORK` (code 2) = Erreur réseau
+- `DECODE` (code 3) = Erreur de décodage
+- `SRC_NOT_SUPPORTED` (code 4) = **Format non supporté** ← Le plus probable si Content-Type incorrect
+
+**ReadyState (RS) et NetworkState (NS)** :
+- RS: 0=vide, 1=métadonnées, 2=données, 3=futures, 4=enough
+- NS: 0=vide, 1=idle, 2=loading, 3=no_source
+
+---
+
 ## 🔄 Prochaines étapes
 
-1. **Tester sur Desktop** : Les vidéos objet devraient maintenant fonctionner
-2. **Tester sur iPad/iPhone** : Observer les nouveaux logs détaillés
-3. Si `loadedmetadata` ne se déclenche pas → Le problème est le Content-Type sur Vercel Blob (vérifier avec curl)
+1. **Tester sur Desktop** : Les vidéos objet devraient fonctionner
+2. **Tester sur iPad/iPhone** : Les messages de debug s'afficheront en haut de l'écran
+3. **Noter le message d'erreur exact** s'il y en a un (code, type, states)
 
 ---
 
