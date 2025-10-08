@@ -687,10 +687,41 @@ export default function Home() {
     // Démarrer la vidéo et l'audio
     if (videoRef.current && audioRef.current) {
       const videoUrl = getOptimizedVideoUrl(currentVideo);
-      debugLog('📹 URL: ' + videoUrl.substring(0, 50) + '...');
+      debugLog('📹 URL complete: ' + videoUrl);
+      
+      // Test CORS et format pour Safari
+      if (isSafari || isIOS) {
+        try {
+          const response = await fetch(videoUrl, { method: 'HEAD' });
+          const cors = response.headers.get('access-control-allow-origin') || 'none';
+          debugLog('🌐 Status: ' + response.status + ' CORS: ' + cors);
+        } catch (corsError: any) {
+          debugLog('🚫 CORS error: ' + corsError.message);
+        }
+        
+        // Test support format vidéo
+        const canPlay = videoRef.current.canPlayType('video/mp4; codecs="avc1.42E01E"');
+        debugLog('🎬 canPlayType mp4: ' + (canPlay || 'no'));
+      }
       
       if (videoRef.current.src !== videoUrl) {
         videoRef.current.src = videoUrl;
+        
+        // Ajouter un listener pour les erreurs de chargement
+        videoRef.current.onerror = (e) => {
+          const video = videoRef.current;
+          if (video && video.error) {
+            const errorCode = video.error.code;
+            const errorMessages = {
+              1: 'MEDIA_ERR_ABORTED',
+              2: 'MEDIA_ERR_NETWORK', 
+              3: 'MEDIA_ERR_DECODE',
+              4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+            };
+            debugLog('🚨 Video error code: ' + errorCode + ' = ' + errorMessages[errorCode as keyof typeof errorMessages]);
+          }
+        };
+        
         videoRef.current.load();
       }
       
@@ -714,6 +745,8 @@ export default function Home() {
       
       try {
         debugLog('▶️ Tentative lecture vidéo...');
+        // Log l'état de la vidéo avant lecture
+        debugLog('📊 readyState: ' + videoRef.current.readyState + ' networkState: ' + videoRef.current.networkState);
         await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
         debugLog('✅ Vidéo lancée avec succès');
         
@@ -728,15 +761,23 @@ export default function Home() {
           }, 100);
         }
       } catch (error: any) {
-        debugLog('❌ Erreur lecture: ' + error.name);
-        console.error("❌ Erreur lecture vidéo:", error);
+        const errorMsg = error.message || error.name || 'Unknown';
+        debugLog('❌ Erreur: ' + errorMsg);
+        debugLog('📊 readyState: ' + videoRef.current.readyState + ' networkState: ' + videoRef.current.networkState);
+        console.error("❌ Erreur lecture vidéo complète:", error);
+        
         if (error?.name !== 'AbortError') {
           // Réessayer avec muted pour Safari
           if (isSafari || isIOS) {
             try {
-              debugLog('🔄 Retry avec muted...');
+              debugLog('🔄 Retry muted...');
               videoRef.current.muted = true;
+              videoRef.current.volume = 0;
+              // Recharger la vidéo avant retry
+              videoRef.current.load();
+              await new Promise(resolve => setTimeout(resolve, 500));
               await videoRef.current.play();
+              debugLog('✅ Retry réussi !');
               // Unmute après 100ms
               setTimeout(() => {
                 if (videoRef.current && currentVideo === "introduction") {
@@ -744,9 +785,11 @@ export default function Home() {
                   videoRef.current.volume = videoVolume;
                 }
               }, 100);
-            } catch (retryError) {
-              debugLog('❌ Retry échoué');
-              console.error("❌ Retry échoué:", retryError);
+            } catch (retryError: any) {
+              const retryMsg = retryError.message || retryError.name || 'Unknown';
+              debugLog('❌ Retry failed: ' + retryMsg);
+              debugLog('📊 Final readyState: ' + videoRef.current.readyState);
+              console.error("❌ Retry échoué complet:", retryError);
             }
           }
         }
@@ -1143,7 +1186,7 @@ export default function Home() {
           webkit-playsinline="true"
           autoPlay={false}
           preload={isSafari ? "metadata" : (currentVideo === "outro" || currentVideo === "generique" ? "metadata" : "none")}
-          crossOrigin="anonymous"
+          crossOrigin={isSafari || isIOS ? undefined : "anonymous"}
           muted={(isMobile || isSafari || isIOS) && currentVideo !== "introduction"} // Important pour mobile/Safari/iOS, sauf introduction
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
@@ -1170,7 +1213,7 @@ export default function Home() {
           src={getBlobUrl("main_song")}
           loop
           preload={isSafari ? "metadata" : "none"}
-          crossOrigin="anonymous"
+          crossOrigin={isSafari || isIOS ? undefined : "anonymous"}
         />
         
         {/* Vidéo explicative superposée */}
@@ -1184,7 +1227,7 @@ export default function Home() {
               playsInline
               webkit-playsinline="true"
               preload="metadata"
-              crossOrigin="anonymous"
+              crossOrigin={isSafari || isIOS ? undefined : "anonymous"}
               muted={false}
             style={{
               width: '100%',
