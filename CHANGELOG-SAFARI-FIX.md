@@ -714,11 +714,83 @@ muted={true}  // Au lieu de muted={false}
 
 ---
 
-## 🔄 Prochaines étapes
+## 🎉 SUCCÈS COMPLET - iOS fonctionne ! (Session 14)
 
-1. **Tester sur iOS** : main_song et text_x devraient maintenant fonctionner
-2. **Tester l'expérience complète** sur iPad/iPhone
-3. **Vérifier Desktop** : Devrait toujours fonctionner normalement
+### ✅ Tests confirmés sur iOS
+
+- ✅ **main_song** se lance (avec délai initial normal)
+- ✅ **outro_song** fonctionne parfaitement
+- ✅ **Vidéos text_x** s'affichent correctement
+- ✅ **Toutes les vidéos** fonctionnent
+
+### ⏱️ Problème du délai main_song
+
+**Observation** : main_song apparaît tardivement (5-10 secondes de délai)
+
+**Cause** : Méthode Blob URL nécessite de **télécharger le fichier complet** avant de jouer
+- Fichier audio de plusieurs Mo
+- Connexion mobile peut être lente
+- C'est le prix à payer pour contourner le Content-Type incorrect
+
+### 🚀 Optimisation - Préchargement main_song
+
+**Solution implémentée** : Précharger main_song **pendant l'intro**
+
+```typescript
+// Au démarrage de l'intro, lancer le téléchargement en arrière-plan
+const response = await fetch(audioUrl);
+const blob = await response.blob();
+const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
+const blobUrl = URL.createObjectURL(audioBlob);
+setPreloadedMainSongUrl(blobUrl); // Stocker pour utilisation à 40s
+
+// À 40s, utiliser le Blob préchargé
+if (audioId === "main_song" && preloadedMainSongUrl) {
+  audioRef.current.src = preloadedMainSongUrl; // ✅ Instantané !
+}
+```
+
+**Résultat attendu** :
+- Téléchargement démarre dès le clic sur "Commencer"
+- À 40s, le fichier est déjà prêt
+- main_song démarre **instantanément** (ou presque)
+
+### 📊 Bilan final
+
+| Élément | Desktop | Safari/iOS | Solution |
+|---------|---------|------------|----------|
+| Vidéos intro/outro | ✅ | ✅ | Blob URL + muted |
+| Vidéos POV | ✅ | ✅ | Blob URL + muted |
+| Vidéos objets | ✅ | ✅ | Blob URL + muted |
+| Vidéos text_x | ✅ | ✅ | Blob URL + muted |
+| main_song | ✅ | ✅ | Blob URL + préchargement |
+| outro_song | ✅ | ✅ | Blob URL + muted |
+| Audio objets | ✅ | ✅ | Blob URL + muted |
+
+### 🏆 Solution finale complète
+
+**Pour Safari/iOS** :
+1. Blob URL avec Content-Type forcé (`video/mp4`, `audio/mpeg`)
+2. Toujours démarrer en `muted=true`
+3. Unmute après play réussi
+4. Précharger main_song pendant l'intro
+
+**Pour Desktop** :
+- URLs directes (pas de changement)
+
+---
+
+## 🎯 Mission accomplie !
+
+Après 14 sessions de debugging, **l'application fonctionne maintenant sur Safari/iOS** ! 🎉
+
+Les problèmes résolus :
+- ❌ ~~Content-Type incorrect sur Vercel Blob~~
+- ❌ ~~Safari refuse de charger les vidéos~~
+- ❌ ~~Autoplay bloqué~~
+- ❌ ~~main_song ne se lance pas~~
+- ❌ ~~Vidéos text_x ne s'affichent pas~~
+- ✅ **TOUT FONCTIONNE !**
 
 ---
 

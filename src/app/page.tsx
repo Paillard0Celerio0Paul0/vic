@@ -204,22 +204,31 @@ export default function Home() {
       // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type (comme pour vidéo)
       if (isSafari || isIOS) {
         console.log("🍎 Safari/iOS audio - utilisation Blob URL");
-        setDebugMessage("📥 Téléchargement audio...");
         
-        // Fetch et créer Blob avec bon Content-Type
-        const response = await fetch(audioUrl);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        let blobUrl: string;
+        
+        // Utiliser le Blob préchargé si disponible pour main_song
+        if (audioId === "main_song" && preloadedMainSongUrl) {
+          console.log("✅ Utilisation de main_song préchargé");
+          setDebugMessage("⏳ Audio préchargé...");
+          blobUrl = preloadedMainSongUrl;
+        } else {
+          // Sinon, télécharger normalement
+          setDebugMessage("📥 Téléchargement audio...");
+          const response = await fetch(audioUrl);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          
+          const blob = await response.blob();
+          console.log("📦 Audio blob reçu:", blob.size, "bytes, type:", blob.type);
+          
+          // Forcer le bon Content-Type
+          const mimeType = audioId.includes('song') ? 'audio/mpeg' : 'audio/mp4';
+          const audioBlob = new Blob([blob], { type: mimeType });
+          blobUrl = URL.createObjectURL(audioBlob);
+          console.log("✅ Audio Blob URL créé:", blobUrl);
         }
-        
-        const blob = await response.blob();
-        console.log("📦 Audio blob reçu:", blob.size, "bytes, type:", blob.type);
-        
-        // Forcer le bon Content-Type
-        const mimeType = audioId.includes('song') ? 'audio/mpeg' : 'audio/mp4';
-        const audioBlob = new Blob([blob], { type: mimeType });
-        const blobUrl = URL.createObjectURL(audioBlob);
-        console.log("✅ Audio Blob URL créé:", blobUrl);
         
         // IMPORTANT : Safari bloque autoplay audio - démarrer en muted
         audioRef.current.muted = true;
@@ -783,6 +792,9 @@ export default function Home() {
     }
   };
 
+  // État pour stocker le Blob URL de main_song préchargé
+  const [preloadedMainSongUrl, setPreloadedMainSongUrl] = useState<string | null>(null);
+
   const handlePlay = async () => {
     try {
       setDebugMessage("🚀 Démarrage...");
@@ -792,6 +804,24 @@ export default function Home() {
       // Unlock audio en parallèle, ne pas bloquer la vidéo
       if (audioRef.current && (isIOS || isSafari) && !audioUnlocked) {
         unlockAudioFromGesture().catch(e => console.log("Unlock audio skip:", e));
+      }
+
+      // Précharger main_song en arrière-plan pour Safari/iOS
+      if ((isSafari || isIOS) && currentVideo === "introduction" && !preloadedMainSongUrl) {
+        console.log("🎵 Préchargement main_song en arrière-plan...");
+        (async () => {
+          try {
+            const audioUrl = getBlobUrl("main_song");
+            const response = await fetch(audioUrl);
+            const blob = await response.blob();
+            const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
+            const blobUrl = URL.createObjectURL(audioBlob);
+            setPreloadedMainSongUrl(blobUrl);
+            console.log("✅ main_song préchargé:", blobUrl);
+          } catch (error) {
+            console.error("❌ Erreur préchargement main_song:", error);
+          }
+        })();
       }
 
       setDebugMessage("📹 Lancement vidéo...");
