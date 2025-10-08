@@ -367,12 +367,87 @@ console.warn(`⚠️ playWithRetry tentative ${attempt + 1} échouée:`, { name,
 
 ---
 
+## 🔧 Nouvelle approche - Attente événement canplay (Session 7)
+
+### Problème rencontré
+- ❌ `playWithRetry: echec` sur Safari/iOS
+- Toutes les tentatives échouent malgré `muted=true`
+
+### Hypothèse
+**Safari n'est pas prêt quand on appelle play()**
+
+Le problème possible :
+1. On charge la vidéo avec `load()`
+2. On appelle `play()` immédiatement
+3. Safari n'a pas eu le temps de charger les métadonnées
+4. `play()` échoue car readyState insuffisant
+
+### Nouvelle solution : Attendre l'événement `canplay`
+
+**Changement appliqué** :
+```typescript
+// AVANT (échouait)
+videoRef.current.src = videoUrl;
+videoRef.current.load();
+await playWithRetry(...); // ❌ Échec
+
+// APRÈS (attend que Safari soit prêt)
+videoRef.current.src = videoUrl;
+
+// Attendre l'événement 'canplay' avant de play()
+await new Promise((resolve, reject) => {
+  const onCanPlay = () => {
+    console.log("✅ Métadonnées chargées, readyState:", readyState);
+    resolve();
+  };
+  const onError = (e) => {
+    console.error("❌ Erreur chargement:", e);
+    reject(new Error("Erreur chargement vidéo"));
+  };
+  
+  videoRef.current.addEventListener('canplay', onCanPlay);
+  videoRef.current.addEventListener('error', onError);
+  videoRef.current.load(); // Démarrer le chargement
+  
+  // Timeout 10s si jamais canplay ne se déclenche pas
+  setTimeout(() => reject(new Error("Timeout")), 10000);
+});
+
+// Maintenant on peut play() en toute sécurité
+await videoRef.current.play(); // ✅ Devrait fonctionner
+```
+
+### Ce qui va se passer
+
+**Scénario 1 - Succès** :
+```
+⏳ Attente chargement métadonnées...
+✅ Métadonnées chargées, readyState: 4
+▶️ Tentative play (muted)...
+✅ Lecture réussie
+🔊 Activation du son
+```
+
+**Scénario 2 - Erreur de chargement** :
+```
+⏳ Attente chargement métadonnées...
+❌ Erreur chargement vidéo: [détails]
+```
+
+**Scénario 3 - Timeout** :
+```
+⏳ Attente chargement métadonnées...
+❌ Timeout chargement vidéo (après 10s)
+```
+
+---
+
 ## 🔄 Prochaines étapes
 
-1. **Tester sur iPad/iPhone** avec console Safari ouverte
-2. Observer les logs détaillés de `playWithRetry`
-3. Vérifier si l'intro se lance en muted puis s'active
-4. Si ça bloque encore : analyser le readyState/networkState dans les logs
+1. **Tester sur iPad/iPhone** avec console Safari
+2. Observer si `canplay` se déclenche ou si on a une erreur
+3. Si `canplay` se déclenche → le play devrait fonctionner
+4. Si erreur de chargement → problème avec l'URL ou le Content-Type Vercel Blob
 
 ---
 

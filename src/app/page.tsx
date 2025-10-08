@@ -100,11 +100,38 @@ export default function Home() {
         // On démarre TOUJOURS en muted, puis on unmute après
         videoRef.current.muted = true;
         videoRef.current.src = videoUrl;
-        videoRef.current.load();
+        
+        // Attendre que la vidéo soit prête avant de play()
+        console.log("⏳ Attente chargement métadonnées...");
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error("Timeout chargement vidéo"));
+          }, 10000); // 10 secondes max
+          
+          const onCanPlay = () => {
+            clearTimeout(timeout);
+            console.log("✅ Métadonnées chargées, readyState:", videoRef.current?.readyState);
+            videoRef.current?.removeEventListener('canplay', onCanPlay);
+            videoRef.current?.removeEventListener('error', onError);
+            resolve();
+          };
+          
+          const onError = (e: Event) => {
+            clearTimeout(timeout);
+            console.error("❌ Erreur chargement vidéo:", e);
+            videoRef.current?.removeEventListener('canplay', onCanPlay);
+            videoRef.current?.removeEventListener('error', onError);
+            reject(new Error("Erreur chargement vidéo"));
+          };
+          
+          videoRef.current?.addEventListener('canplay', onCanPlay);
+          videoRef.current?.addEventListener('error', onError);
+          videoRef.current?.load();
+        });
         
         try {
           console.log("▶️ Tentative play (muted)...");
-          await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+          await videoRef.current.play();
           console.log("✅ Lecture réussie");
           setDebugMessage("✅ Lecture OK");
           
@@ -123,8 +150,9 @@ export default function Home() {
             setTimeout(() => setDebugMessage(""), 2000);
           }
         } catch (error) {
-          console.error("❌ Erreur avec URL directe:", error);
+          console.error("❌ Erreur play:", error);
           setDebugMessage("❌ Erreur: " + (error instanceof Error ? error.message : String(error)));
+          throw error;
         }
       } else {
         // Pour les autres navigateurs
