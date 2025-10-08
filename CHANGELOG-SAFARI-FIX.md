@@ -510,20 +510,46 @@ await put(uploadName, fileBuffer, {
 
 ---
 
+## 🔧 Correction build Next.js (Session 9)
+
+### Problème de déploiement
+```
+ReferenceError: module is not defined in ES module scope
+```
+
+**Cause** : L'ajout de `"type": "module"` dans `package.json` forçait Next.js à traiter `next.config.js` comme un module ES, alors qu'il utilise la syntaxe CommonJS.
+
+**Solution appliquée** :
+1. ✅ Retrait de `"type": "module"` du `package.json`
+2. ✅ Renommage du script : `upload-optimized-videos.js` → `upload-optimized-videos.mjs`
+3. ✅ Les fichiers `.mjs` sont automatiquement traités comme modules ES
+
+**Résultat** :
+- ✅ Next.js peut build normalement
+- ✅ Le script d'upload fonctionne toujours avec la syntaxe ES module
+
+---
+
 ## 🔄 Prochaines étapes
 
-1. **Vérifier le Content-Type** avec la commande curl
-2. **Si Content-Type incorrect** : Re-uploader les fichiers
-3. **Retester sur iPad/iPhone** après upload
-4. Si ça ne fonctionne toujours pas → investiguer autre chose (mais très probablement c'est le Content-Type)
+1. **Re-déployer** sur Vercel (le build devrait maintenant fonctionner)
+2. **Uploader les vidéos** avec `npm run upload-videos`
+3. **Retester sur iPad/iPhone** après upload avec les nouveaux Content-Types
 
 ---
 
 ## 📝 Fichiers modifiés
 
-1. `src/app/page.tsx` - Logique principale
+### Code principal
+1. `src/app/page.tsx` - Logique Safari/iOS avec attente événement canplay
 2. `src/app/globals.css` - Animation fadeIn pour flèches
-3. `scripts/upload-optimized-videos.js` - contentType pour futurs uploads
+
+### Scripts et configuration
+3. `scripts/upload-optimized-videos.mjs` - Upload avec extensions et Content-Type corrects
+4. `package.json` - Commande `upload-videos` et retrait de `"type": "module"`
+
+### Documentation
+5. `CHANGELOG-SAFARI-FIX.md` - Documentation complète de toutes les corrections
 
 ---
 
