@@ -35,6 +35,57 @@ export default function Home() {
   const [mainMusicPosition, setMainMusicPosition] = useState(0);
   const [introductionUrl] = useState("https://ntpqkpm4vpvltypf.public.blob.vercel-storage.com/introduction");
 
+  // Détection iOS/Safari et gestion du déverrouillage audio
+  const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isSafari = typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [needAudioEnableUI, setNeedAudioEnableUI] = useState(false);
+
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const unlockAudioFromGesture = async () => {
+    if (!audioRef.current) return;
+    try {
+      const previousMuted = audioRef.current.muted;
+      const previousVolume = audioRef.current.volume;
+      audioRef.current.muted = true;
+      audioRef.current.volume = 0;
+      await audioRef.current.play();
+      audioRef.current.pause();
+      audioRef.current.muted = previousMuted;
+      audioRef.current.volume = previousVolume;
+      setAudioUnlocked(true);
+      setNeedAudioEnableUI(false);
+    } catch (e) {
+      setNeedAudioEnableUI(true);
+    }
+  };
+
+  const playWithRetry = async (
+    element: HTMLMediaElement,
+    { maxAttempts = 4, baseDelayMs = 200 }: { maxAttempts?: number; baseDelayMs?: number } = {}
+  ) => {
+    let attempt = 0;
+    while (attempt < maxAttempts) {
+      try {
+        await element.play();
+        return;
+      } catch (err: any) {
+        const name = err?.name || '';
+        const isGate = name === 'NotAllowedError';
+        if (isGate && (isIOS || isSafari)) {
+          setNeedAudioEnableUI(true);
+        }
+        try {
+          element.load();
+        } catch {}
+        attempt += 1;
+        await wait(baseDelayMs * Math.pow(2, attempt - 1));
+      }
+    }
+    throw new Error('playWithRetry: echec');
+  };
+
   // Fonction pour obtenir l'URL optimisée avec Vercel Blob
 
   // Fonction pour tester si une vidéo explicative existe
@@ -365,8 +416,18 @@ export default function Home() {
       // À 39 secondes de la vidéo d'introduction : lancer la musique (5 secondes plus tôt)
       if (currentVideo === "introduction" && videoRef.current.currentTime >= 40 && audioRef.current) {
         if (audioRef.current.paused) {
-          audioRef.current.play();
-          audioRef.current.volume = videoVolume;
+          (async () => {
+            try {
+              if ((isIOS || isSafari) && !audioUnlocked) {
+                await unlockAudioFromGesture();
+              }
+              await playWithRetry(audioRef.current!);
+              audioRef.current!.volume = videoVolume;
+              setNeedAudioEnableUI(false);
+            } catch {
+              setNeedAudioEnableUI(true);
+            }
+          })();
         }
       }
       
@@ -556,38 +617,42 @@ export default function Home() {
     }
   };
 
-  const handlePlay = () => {
+  const handlePlay = async () => {
     setIsPlaying(true);
     setVideoEnded(false);
+
+    if (audioRef.current && (isIOS || isSafari) && !audioUnlocked) {
+      await unlockAudioFromGesture();
+    }
 
     // Démarrer la vidéo et l'audio
     if (videoRef.current && audioRef.current) {
       const videoUrl = getOptimizedVideoUrl(currentVideo);
       
-      // S'assurer que la source est bien définie
       if (videoRef.current.src !== videoUrl) {
         videoRef.current.src = videoUrl;
       }
       
-      videoRef.current.play()
-        .then(() => {
-        })
-        .catch((error) => {
-          // Ignorer les erreurs AbortError (conflits de chargement)
-          if (error.name === 'AbortError') {
-            return;
-          }
-        });
+      try {
+        await videoRef.current.play();
+      } catch (error: any) {
+        if (error?.name !== 'AbortError') {
+          // no-op
+        }
+      }
       
-      // Si c'est la vidéo d'introduction, on active son audio
       if (currentVideo === "introduction") {
         videoRef.current.volume = videoVolume;
-        videoRef.current.muted = false; // Important pour mobile
+        videoRef.current.muted = false;
         audioRef.current.pause();
       } else {
         videoRef.current.volume = 0;
-        audioRef.current.play();
-        audioRef.current.volume = videoVolume;
+        try {
+          await playWithRetry(audioRef.current);
+          audioRef.current.volume = videoVolume;
+        } catch {
+          setNeedAudioEnableUI(true);
+        }
       }
     }
   };
@@ -860,6 +925,29 @@ export default function Home() {
     }
   }, [showExplanatoryVideo, explanatoryVideo]);
 
+  // Relance prudente à la reprise de visibilité (utile iOS Safari)
+  useEffect(() => {
+    const onVisibility = async () => {
+      if (!audioRef.current) return;
+      if (document.visibilityState === 'visible') {
+        if ((isIOS || isSafari) && audioUnlocked) {
+          try {
+            if (audioRef.current.paused) {
+              await playWithRetry(audioRef.current, { maxAttempts: 2, baseDelayMs: 150 });
+              audioRef.current.volume = videoVolume;
+            }
+          } catch {}
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pageshow', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pageshow', onVisibility);
+    };
+  }, [audioUnlocked, videoVolume]);
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-black">
       {/* Préchargeur de vidéos - DÉSACTIVÉ pour économiser les coûts Vercel */}
@@ -1013,6 +1101,25 @@ export default function Home() {
                   Commencer
                 </button>
               )}
+              {needAudioEnableUI && (
+                <div className="mt-4">
+                  <button
+                    onClick={async () => {
+                      await unlockAudioFromGesture();
+                      if (audioRef.current) {
+                        try {
+                          await playWithRetry(audioRef.current);
+                          audioRef.current.volume = videoVolume;
+                          setNeedAudioEnableUI(false);
+                        } catch {}
+                      }
+                    }}
+                    className="dogica-white text-base bg-transparent border-2 border-white px-4 py-2 rounded-lg hover:bg-white hover:text-black transition-all"
+                  >
+                    Activer le son
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -1091,6 +1198,27 @@ export default function Home() {
                 currentVideo={currentVideo}
                 onZoneClick={handleZoneClick}
               />
+            )}
+
+            {/* Bouton fallback Activer le son pendant le jeu */}
+            {needAudioEnableUI && (
+              <div className="absolute inset-x-0 top-4 flex justify-center z-20">
+                <button
+                  onClick={async () => {
+                    await unlockAudioFromGesture();
+                    if (audioRef.current) {
+                      try {
+                        await playWithRetry(audioRef.current);
+                        audioRef.current.volume = videoVolume;
+                        setNeedAudioEnableUI(false);
+                      } catch {}
+                    }
+                  }}
+                  className="dogica-white text-base bg-transparent border-2 border-white px-4 py-2 rounded-lg hover:bg-white hover:text-black transition-all"
+                >
+                  Activer le son
+                </button>
+              </div>
             )}
 
             {/* Flèche de retour - visible uniquement à la fin des vidéos d'objets */}
