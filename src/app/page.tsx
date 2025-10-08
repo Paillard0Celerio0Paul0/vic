@@ -34,6 +34,7 @@ export default function Home() {
   const [generiquePlayed, setGeneriquePlayed] = useState(false);
   const [mainMusicPosition, setMainMusicPosition] = useState(0);
   const [introductionUrl] = useState("https://ntpqkpm4vpvltypf.public.blob.vercel-storage.com/introduction");
+  const [showArrows, setShowArrows] = useState(false);
 
   // Détection iOS/Safari et gestion du déverrouillage audio
   const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -117,7 +118,7 @@ export default function Home() {
 
 
   // Fonction pour lancer la séquence de fin
-  const launchEndSequence = () => {
+  const launchEndSequence = async () => {
     setCurrentVideo("outro");
     setVideoType("outro");
     
@@ -131,55 +132,52 @@ export default function Home() {
     setIsTransitioning(true);
     const outroUrl = getBlobUrl("outro");
     setNextVideoSrc(outroUrl);
-    // Remplacer preloadVideoForMobile par un chargement direct
-    (() => {
-      // Une fois préchargée, faire la transition
-      if (videoRef.current) {
+    
+    // Une fois préchargée, faire la transition
+    if (videoRef.current) {
+      videoRef.current.src = outroUrl;
+      videoRef.current.volume = 1.0; // Volume maximum pour la vidéo finale
+      videoRef.current.muted = false; // S'assurer que le son n'est pas coupé
+      videoRef.current.load();
       
-        videoRef.current.src = outroUrl;
-      
-        videoRef.current.volume = 1.0; // Volume maximum pour la vidéo finale
-        videoRef.current.muted = false; // S'assurer que le son n'est pas coupé
-     
-        videoRef.current.load();
-       
-        videoRef.current.onloadeddata = () => {
-       
-          if (videoRef.current) {
-           
-            videoRef.current.play()
-              .then(() => {
+      videoRef.current.onloadeddata = async () => {
+        if (videoRef.current) {
+          try {
+            // Utiliser playWithRetry pour Safari
+            await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
             
-                setIsTransitioning(false);
-                setNextVideoSrc(null);
-                
-                // Masquer le score quelques secondes après le démarrage de l'outro
-                setTimeout(() => {
-                  setShowScore(false);
-                }, 3000); // 3 secondes après le démarrage
-                
-                // Après 6 secondes, lancer outro_song en parallèle
-                setTimeout(() => {
-                  if (audioRef.current) {
-                    audioRef.current.src = getBlobUrl("outro_song");
-                    audioRef.current.volume = videoVolume;
-                    audioRef.current.loop = false; // Ne pas boucler la musique outro
-                    audioRef.current.play();
-                  }
-                }, 6000); // 6 secondes après le démarrage de outro
-              })
-              .catch((error) => {
-                console.error("❌ Erreur lors du lancement de la vidéo outro:", error);
-                if (error.name === 'AbortError') {
-                  return;
+            setIsTransitioning(false);
+            setNextVideoSrc(null);
+            
+            // Masquer le score quelques secondes après le démarrage de l'outro
+            setTimeout(() => {
+              setShowScore(false);
+            }, 3000); // 3 secondes après le démarrage
+            
+            // Après 6 secondes, lancer outro_song en parallèle
+            setTimeout(async () => {
+              if (audioRef.current) {
+                audioRef.current.src = getBlobUrl("outro_song");
+                audioRef.current.volume = videoVolume;
+                audioRef.current.loop = false; // Ne pas boucler la musique outro
+                try {
+                  await playWithRetry(audioRef.current);
+                } catch (error) {
+                  console.error("❌ Erreur lecture outro_song:", error);
                 }
-                setIsTransitioning(false);
-                setNextVideoSrc(null);
-              });
+              }
+            }, 6000); // 6 secondes après le démarrage de outro
+          } catch (error: any) {
+            console.error("❌ Erreur lors du lancement de la vidéo outro:", error);
+            if (error.name === 'AbortError') {
+              return;
+            }
+            setIsTransitioning(false);
+            setNextVideoSrc(null);
           }
-        };
-      }
-    })();
+        }
+      };
+    }
     
     setOutroPlayed(true);
     setVideoEnded(false);
@@ -305,20 +303,20 @@ export default function Home() {
         videoRef.current.load();
         
         // Attendre que la vidéo soit chargée puis la lancer
-        videoRef.current.onloadeddata = () => {
+        videoRef.current.onloadeddata = async () => {
           if (videoRef.current) {
-            videoRef.current.play()
-              .then(() => {
-                setIsTransitioning(false);
-                setNextVideoSrc(null);
-              })
-              .catch((error) => {
-                if (error.name === 'AbortError') {
-                  return;
-                }
-                setIsTransitioning(false);
-                setNextVideoSrc(null);
-              });
+            try {
+              await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+              setIsTransitioning(false);
+              setNextVideoSrc(null);
+            } catch (error: any) {
+              if (error?.name === 'AbortError') {
+                return;
+              }
+              console.error("❌ Erreur lecture transition:", error);
+              setIsTransitioning(false);
+              setNextVideoSrc(null);
+            }
           }
         };
       }
@@ -360,20 +358,21 @@ export default function Home() {
         videoRef.current.load();
         
         // Attendre que la vidéo soit chargée puis la lancer
-        videoRef.current.onloadeddata = () => {
+        videoRef.current.onloadeddata = async () => {
           if (videoRef.current) {
-            videoRef.current.play()
-              .then(() => {
-                setIsTransitioning(false);
-                setNextVideoSrc(null);
-              })
-              .catch((error) => {
-                if (error.name === 'AbortError') {
-                  return;
-                }
-                setIsTransitioning(false);
-                setNextVideoSrc(null);
-              });
+            try {
+              // Utiliser playWithRetry pour Safari
+              await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+              setIsTransitioning(false);
+              setNextVideoSrc(null);
+            } catch (error: any) {
+              if (error?.name === 'AbortError') {
+                return;
+              }
+              console.error("❌ Erreur lecture vidéo objet:", error);
+              setIsTransitioning(false);
+              setNextVideoSrc(null);
+            }
           }
         };
       }
@@ -391,13 +390,19 @@ export default function Home() {
         fadeAudio(audioRef.current, 0, 500); // Fade out sur 500ms
 
         // Après le fade out, on change la source et on fait un fade in
-        setTimeout(() => {
+        setTimeout(async () => {
           if (audioRef.current) {
             audioRef.current.src = getBlobUrl(`${objetType}_song`);
             audioRef.current.volume = 0;
-            audioRef.current.play();
-            fadeAudio(audioRef.current, videoVolume, 500); // Fade in sur 500ms
-            setIsFading(false);
+            audioRef.current.load();
+            try {
+              await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+              fadeAudio(audioRef.current, videoVolume, 500); // Fade in sur 500ms
+              setIsFading(false);
+            } catch (error) {
+              console.error(`❌ Erreur lecture ${objetType}_song:`, error);
+              setIsFading(false);
+            }
           }
         }, 500);
       } else {
@@ -421,10 +426,14 @@ export default function Home() {
               if ((isIOS || isSafari) && !audioUnlocked) {
                 await unlockAudioFromGesture();
               }
-              await playWithRetry(audioRef.current!);
+              // Charger et jouer main_song
+              audioRef.current!.src = getBlobUrl("main_song");
+              audioRef.current!.load();
+              await playWithRetry(audioRef.current!, { maxAttempts: 5, baseDelayMs: 300 });
               audioRef.current!.volume = videoVolume;
               setNeedAudioEnableUI(false);
-            } catch {
+            } catch (error) {
+              console.error("❌ Erreur lecture main_song:", error);
               setNeedAudioEnableUI(true);
             }
           })();
@@ -450,9 +459,13 @@ export default function Home() {
             if (videoRef.current) {
               videoRef.current.load();
               // Lancer la lecture après le chargement
-              videoRef.current.addEventListener('loadeddata', () => {
+              videoRef.current.addEventListener('loadeddata', async () => {
                 if (videoRef.current) {
-                  videoRef.current.play().catch(console.error);
+                  try {
+                    await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+                  } catch (error) {
+                    console.error("❌ Erreur lecture lit_vers_1:", error);
+                  }
                 }
               }, { once: true });
             }
@@ -484,9 +497,13 @@ export default function Home() {
             if (videoRef.current) {
               videoRef.current.load();
               // Lancer la lecture après le chargement
-              videoRef.current.addEventListener('loadeddata', () => {
+              videoRef.current.addEventListener('loadeddata', async () => {
                 if (videoRef.current) {
-                  videoRef.current.play().catch(console.error);
+                  try {
+                    await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+                  } catch (error) {
+                    console.error("❌ Erreur lecture POV_1 après lit:", error);
+                  }
                 }
               }, { once: true });
             }
@@ -507,9 +524,13 @@ export default function Home() {
             if (videoRef.current) {
               videoRef.current.load();
               // Lancer la lecture après le chargement
-              videoRef.current.addEventListener('loadeddata', () => {
+              videoRef.current.addEventListener('loadeddata', async () => {
                 if (videoRef.current) {
-                  videoRef.current.play().catch(console.error);
+                  try {
+                    await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+                  } catch (error) {
+                    console.error("❌ Erreur lecture POV après transition:", error);
+                  }
                 }
               }, { once: true });
             }
@@ -532,32 +553,30 @@ export default function Home() {
           setNextVideoSrc(generiqueUrl);
 
           // Préchargement direct pour generique
-          // Remplacer preloadVideoForMobile par un chargement direct
-          (() => {
-            // Une fois préchargée, faire la transition
-            if (videoRef.current) {
-              videoRef.current.src = generiqueUrl;
-              videoRef.current.volume = 0; // Pas de son pour le générique
-              videoRef.current.muted = true; // Son coupé pour le générique
-              videoRef.current.load();
-              videoRef.current.onloadeddata = () => {
-                if (videoRef.current) {
-                  videoRef.current.play()
-                    .then(() => {
-                      setIsTransitioning(false);
-                      setNextVideoSrc(null);
-                    })
-                    .catch((error) => {
-                      if (error.name === 'AbortError') {
-                        return;
-                      }
-                      setIsTransitioning(false);
-                      setNextVideoSrc(null);
-                    });
+          if (videoRef.current) {
+            videoRef.current.src = generiqueUrl;
+            videoRef.current.volume = 0; // Pas de son pour le générique
+            videoRef.current.muted = true; // Son coupé pour le générique
+            videoRef.current.load();
+            
+            videoRef.current.onloadeddata = async () => {
+              if (videoRef.current) {
+                try {
+                  // Utiliser playWithRetry pour Safari
+                  await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+                  setIsTransitioning(false);
+                  setNextVideoSrc(null);
+                } catch (error: any) {
+                  console.error("❌ Erreur lecture générique:", error);
+                  if (error.name === 'AbortError') {
+                    return;
+                  }
+                  setIsTransitioning(false);
+                  setNextVideoSrc(null);
                 }
-              };
-            }
-          })();
+              }
+            };
+          }
           
           setGeneriquePlayed(true);
           setVideoEnded(false);
@@ -631,13 +650,39 @@ export default function Home() {
       
       if (videoRef.current.src !== videoUrl) {
         videoRef.current.src = videoUrl;
+        videoRef.current.load();
+      }
+      
+      // Pour Safari, il faut s'assurer que la vidéo est bien chargée avant de la lancer
+      if (isSafari) {
+        videoRef.current.muted = false;
+        videoRef.current.volume = currentVideo === "introduction" ? videoVolume : 0;
+        
+        // Attendre que la vidéo soit prête
+        await new Promise((resolve) => {
+          if (videoRef.current) {
+            videoRef.current.addEventListener('loadeddata', resolve, { once: true });
+            // Fallback timeout
+            setTimeout(resolve, 3000);
+          } else {
+            resolve(null);
+          }
+        });
       }
       
       try {
-        await videoRef.current.play();
+        await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
       } catch (error: any) {
+        console.error("❌ Erreur lecture vidéo:", error);
         if (error?.name !== 'AbortError') {
-          // no-op
+          // Réessayer avec muted pour Safari
+          if (isSafari) {
+            try {
+              videoRef.current.muted = true;
+              await videoRef.current.play();
+              videoRef.current.muted = false;
+            } catch {}
+          }
         }
       }
       
@@ -696,46 +741,46 @@ export default function Home() {
 
 
   // Gestionnaire pour démarrer la vidéo une fois chargée
-  const handleVideoLoaded = () => {
+  const handleVideoLoaded = async () => {
     
     // Auto-démarrer les vidéos lit après chargement
     if (videoType === "lit" && videoRef.current) {
-      videoRef.current.play()
-        .then(() => {
-        })
-        .catch((error) => {
-          if (error.name === 'AbortError') {
-            return;
-          }
-        });
+      try {
+        await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+      } catch (error: any) {
+        if (error?.name === 'AbortError') {
+          return;
+        }
+        console.error("❌ Erreur lecture lit après chargement:", error);
+      }
     }
     
     // Auto-démarrer les vidéos POV après chargement
     if (videoType === "POV" && videoRef.current) {
-      videoRef.current.play()
-        .then(() => {
-        })
-        .catch((error) => {
-          if (error.name === 'AbortError') {
-            return;
-          }
-        });
+      try {
+        await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+      } catch (error: any) {
+        if (error?.name === 'AbortError') {
+          return;
+        }
+        console.error("❌ Erreur lecture POV après chargement:", error);
+      }
     }
     
     // Auto-démarrer les vidéos de transition après chargement
     if (videoType === "transition" && videoRef.current) {
-      videoRef.current.play()
-        .then(() => {
-        })
-        .catch((error) => {
-          if (error.name === 'AbortError') {
-            return;
-          }
-        });
+      try {
+        await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+      } catch (error: any) {
+        if (error?.name === 'AbortError') {
+          return;
+        }
+        console.error("❌ Erreur lecture transition après chargement:", error);
+      }
     }
   };
 
-  const handleReturn = () => {
+  const handleReturn = async () => {
     // D'abord, on arrête la vidéo actuelle
     if (videoRef.current) {
       videoRef.current.pause();
@@ -751,8 +796,12 @@ export default function Home() {
     // Reprendre la musique principale si elle était en pause
     if (audioRef.current && audioRef.current.paused) {
       audioRef.current.currentTime = mainMusicPosition;
-      audioRef.current.play();
-      audioRef.current.volume = videoVolume;
+      try {
+        await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+        audioRef.current.volume = videoVolume;
+      } catch (error) {
+        console.error("❌ Erreur reprise audio après retour:", error);
+      }
     }
 
     // Enfin, on charge la vidéo d'introduction (éviter le log multiple)
@@ -808,9 +857,13 @@ export default function Home() {
         if (videoRef.current) {
           videoRef.current.load();
           // Lancer la lecture après le chargement
-          videoRef.current.addEventListener('loadeddata', () => {
+          videoRef.current.addEventListener('loadeddata', async () => {
             if (videoRef.current) {
-              videoRef.current.play().catch(console.error);
+              try {
+                await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+              } catch (error) {
+                console.error("❌ Erreur lecture POV après retour:", error);
+              }
             }
           }, { once: true });
         }
@@ -822,20 +875,26 @@ export default function Home() {
       setIsFading(true);
       fadeAudio(audioRef.current, 0, 500); // Fade out sur 500ms
 
-      setTimeout(() => {
+      setTimeout(async () => {
         if (audioRef.current) {
           // Ne pas recharger la source si c'est déjà main_song
           if (audioRef.current.src !== getBlobUrl("main_song")) {
             audioRef.current.src = getBlobUrl("main_song");
+            audioRef.current.load();
           }
           audioRef.current.volume = 0;
           
           // Reprendre à la position sauvegardée
           audioRef.current.currentTime = mainMusicPosition;
           
-          audioRef.current.play();
-          fadeAudio(audioRef.current, videoVolume, 500); // Fade in sur 500ms
-          setIsFading(false);
+          try {
+            await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+            fadeAudio(audioRef.current, videoVolume, 500); // Fade in sur 500ms
+            setIsFading(false);
+          } catch (error) {
+            console.error("❌ Erreur reprise main_song:", error);
+            setIsFading(false);
+          }
         }
       }, 500);
     }
@@ -858,14 +917,20 @@ export default function Home() {
         videoRef.current.volume = 0;
         
         // On attend que la vidéo soit chargée avant de la lancer
-        videoRef.current.onloadeddata = () => {
+        videoRef.current.onloadeddata = async () => {
           if (videoRef.current) {
             videoRef.current.currentTime = 0;
-            videoRef.current.play();
-            setVideoEnded(false);
-            setIsPlaying(true);
-            setIsTransitioning(false);
-            setNextVideoSrc(null);
+            try {
+              await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+              setVideoEnded(false);
+              setIsPlaying(true);
+              setIsTransitioning(false);
+              setNextVideoSrc(null);
+            } catch (error) {
+              console.error("❌ Erreur lecture POV après préchargement:", error);
+              setIsTransitioning(false);
+              setNextVideoSrc(null);
+            }
           }
         };
       }
@@ -875,10 +940,14 @@ export default function Home() {
   // Gestionnaire pour la fin de la musique principale
   useEffect(() => {
     if (audioRef.current) {
-      const handleAudioEnded = () => {
+      const handleAudioEnded = async () => {
         if (audioRef.current) {
           audioRef.current.currentTime = 0;
-          audioRef.current.play();
+          try {
+            await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+          } catch (error) {
+            console.error("❌ Erreur reprise audio en boucle:", error);
+          }
         }
       };
 
@@ -910,7 +979,8 @@ export default function Home() {
         // NE PAS arrêter audioRef car outro_song doit continuer pendant le générique
         // S'assurer que outro_song continue à jouer
         if (audioRef.current && audioRef.current.paused) {
-          audioRef.current.play();
+          playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 })
+            .catch(error => console.error("❌ Erreur reprise outro_song:", error));
         }
       } else {
         videoRef.current.volume = 0;
@@ -924,6 +994,24 @@ export default function Home() {
     if (showExplanatoryVideo && explanatoryVideo && explanatoryVideoRef.current) {
     }
   }, [showExplanatoryVideo, explanatoryVideo]);
+
+  // Gérer l'apparition des flèches de navigation POV avec un délai de 3 secondes
+  useEffect(() => {
+    if (videoType === "POV" && currentVideo !== "introduction") {
+      // Masquer les flèches immédiatement quand on change de POV
+      setShowArrows(false);
+      
+      // Les afficher après 3 secondes
+      const timer = setTimeout(() => {
+        setShowArrows(true);
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    } else {
+      // Si on n'est pas sur un POV, masquer les flèches
+      setShowArrows(false);
+    }
+  }, [videoType, currentVideo]);
 
   // Relance prudente à la reprise de visibilité (utile iOS Safari)
   useEffect(() => {
@@ -981,7 +1069,8 @@ export default function Home() {
               : getOptimizedVideoUrlWithRange(currentVideo)
           }
           playsInline
-          preload={currentVideo === "outro" || currentVideo === "generique" ? "metadata" : "none"}
+          webkit-playsinline="true"
+          preload={isSafari ? "metadata" : (currentVideo === "outro" || currentVideo === "generique" ? "metadata" : "none")}
           crossOrigin="anonymous"
           muted={isMobile && currentVideo !== "introduction"} // Important pour mobile, sauf introduction
           onTimeUpdate={handleTimeUpdate}
@@ -1007,7 +1096,7 @@ export default function Home() {
           ref={audioRef}
           src={getBlobUrl("main_song")}
           loop
-          preload="none"
+          preload={isSafari ? "metadata" : "none"}
           crossOrigin="anonymous"
         />
         
@@ -1020,8 +1109,10 @@ export default function Home() {
               className="absolute inset-0 w-full h-full object-cover pointer-events-none"
               src={videoUrl}
               playsInline
+              webkit-playsinline="true"
               preload="metadata"
               crossOrigin="anonymous"
+              muted={false}
             style={{
               width: '100%',
               height: '100%',
@@ -1035,17 +1126,42 @@ export default function Home() {
               // Ou utilisez 'screen' pour éclaircir
               // Ou 'overlay' pour un effet différent
             }}
-            onCanPlay={() => {
+            onCanPlay={async () => {
               // Démarrer automatiquement la vidéo explicative
               if (explanatoryVideoRef.current) {
-                explanatoryVideoRef.current.play()
-                  .then(() => {
-                  })
+                try {
+                  // Pour Safari, charger explicitement la vidéo avant de jouer
+                  if (isSafari) {
+                    explanatoryVideoRef.current.load();
+                    // Attendre un peu que le load se fasse
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                  }
+                  
+                  // Utiliser playWithRetry pour Safari
+                  await playWithRetry(explanatoryVideoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+                } catch (error: any) {
+                  console.error(`❌ Erreur lancement vidéo explicative ${explanatoryVideo}:`, error);
+                  if (error?.name === 'AbortError') {
+                    return;
+                  }
+                  
+                  // Fallback pour Safari: essayer avec muted puis unmute
+                  if (isSafari && explanatoryVideoRef.current) {
+                    try {
+                      explanatoryVideoRef.current.muted = true;
+                      await explanatoryVideoRef.current.play();
+                      explanatoryVideoRef.current.muted = false;
+                    } catch {}
+                  }
+                }
+              }
+            }}
+            onLoadedData={() => {
+              // Pour Safari, essayer de lancer dès que les données sont chargées
+              if (isSafari && explanatoryVideoRef.current && explanatoryVideoRef.current.paused) {
+                playWithRetry(explanatoryVideoRef.current, { maxAttempts: 3, baseDelayMs: 200 })
                   .catch((error) => {
-                    console.error(`❌ Erreur lancement vidéo explicative ${explanatoryVideo}:`, error);
-                    if (error.name === 'AbortError') {
-                      return;
-                    }
+                    console.error(`❌ Erreur loadedData vidéo explicative ${explanatoryVideo}:`, error);
                   });
               }
             }}
@@ -1127,13 +1243,16 @@ export default function Home() {
 
 
             {/* Flèches de navigation pour les vidéos POV */}
-            {videoType === "POV" && currentVideo !== "introduction" && (
+            {videoType === "POV" && currentVideo !== "introduction" && showArrows && (
               <>
                 {/* POV_1 : Flèche droite vers POV_2 */}
                 {currentVideo === "POV_1" && (
                   <button
                     onClick={() => handleTransition("right")}
-                    className="absolute right-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center"
+                    className="absolute right-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center opacity-0 animate-fadeIn"
+                    style={{
+                      animation: 'fadeIn 0.5s ease-in forwards'
+                    }}
                   >
                     <img 
                       src="/icons/fleche-right.svg" 
@@ -1149,7 +1268,10 @@ export default function Home() {
                     {/* Flèche gauche vers POV_1 */}
                     <button
                       onClick={() => handleTransition("left")}
-                      className="absolute left-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center"
+                      className="absolute left-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center opacity-0 animate-fadeIn"
+                      style={{
+                        animation: 'fadeIn 0.5s ease-in forwards'
+                      }}
                     >
                       <img 
                         src="/icons/fleche-left.svg" 
@@ -1161,7 +1283,10 @@ export default function Home() {
                     {/* Flèche droite vers POV_3 */}
                     <button
                       onClick={() => handleTransition("right")}
-                      className="absolute right-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center"
+                      className="absolute right-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center opacity-0 animate-fadeIn"
+                      style={{
+                        animation: 'fadeIn 0.5s ease-in forwards'
+                      }}
                     >
                       <img 
                         src="/icons/fleche-right.svg" 
@@ -1178,7 +1303,10 @@ export default function Home() {
                     {/* Flèche gauche vers POV_2 */}
                     <button
                       onClick={() => handleTransition("left")}
-                      className="absolute left-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center"
+                      className="absolute left-8 top-1/2 transform -translate-y-1/2 p-6 transition-all hover:scale-105 flex items-center justify-center opacity-0 animate-fadeIn"
+                      style={{
+                        animation: 'fadeIn 0.5s ease-in forwards'
+                      }}
                     >
                       <img 
                         src="/icons/fleche-left.svg" 
@@ -1242,12 +1370,12 @@ export default function Home() {
                   
                   handleReturnToPOV();
                 }}
-                className="absolute bottom-16 right-8 p-8 transition-all hover:scale-105 flex items-center justify-center"
+                className="absolute bottom-8 sm:bottom-16 right-4 sm:right-8 p-4 sm:p-6 md:p-8 transition-all hover:scale-105 flex items-center justify-center"
               >
                 <img 
                   src="/icons/fleche-right.svg" 
                   alt="Retour au POV" 
-                  className="w-20 h-20 filter drop-shadow-lg hover:drop-shadow-xl transition-all" 
+                  className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 filter drop-shadow-lg hover:drop-shadow-xl transition-all" 
                 />
               </button>
             )}
