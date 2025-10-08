@@ -62,20 +62,39 @@ export default function Home() {
 
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  // Fonction helper pour charger et jouer une vidéo sur Safari avec Blob URL
-  const loadAndPlayVideoSafari = async (videoUrl: string) => {
+  // Fonction centralisée pour charger et jouer une vidéo
+  const loadAndPlayVideo = async (videoId: string) => {
     if (!videoRef.current) return;
     
     try {
-      const response = await fetch(videoUrl);
-      const blob = await response.blob();
-      const videoBlob = new Blob([blob], { type: 'video/mp4' });
-      const blobUrl = URL.createObjectURL(videoBlob);
+      let videoUrl: string;
       
-      videoRef.current.src = blobUrl;
-      await videoRef.current.play();
+      // Obtenir l'URL correcte selon le type de vidéo
+      if (videoId === "introduction") {
+        videoUrl = introductionUrl;
+      } else if (videoId === "outro" || videoId === "generique") {
+        videoUrl = getBlobUrl(videoId);
+      } else {
+        videoUrl = getOptimizedVideoUrlWithRange(videoId);
+      }
+      
+      // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
+      if (isSafari || isIOS) {
+        const response = await fetch(videoUrl);
+        const blob = await response.blob();
+        const videoBlob = new Blob([blob], { type: 'video/mp4' });
+        const blobUrl = URL.createObjectURL(videoBlob);
+        
+        videoRef.current.src = blobUrl;
+        await videoRef.current.play();
+      } else {
+        // Pour les autres navigateurs
+        videoRef.current.src = videoUrl;
+        videoRef.current.load();
+        await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+      }
     } catch (error) {
-      console.error("Erreur chargement vidéo Safari:", error);
+      console.error("Erreur chargement vidéo:", error);
     }
   };
 
@@ -168,50 +187,31 @@ export default function Home() {
     const outroUrl = getBlobUrl("outro");
     setNextVideoSrc(outroUrl);
     
-    // Une fois préchargée, faire la transition
+    // Charger et lancer la vidéo outro
     if (videoRef.current) {
-      videoRef.current.src = outroUrl;
-      videoRef.current.volume = 1.0; // Volume maximum pour la vidéo finale
-      videoRef.current.muted = false; // S'assurer que le son n'est pas coupé
-      videoRef.current.load();
+      videoRef.current.volume = 1.0;
+      videoRef.current.muted = false;
       
-      videoRef.current.onloadeddata = async () => {
-        if (videoRef.current) {
-          try {
-            // Utiliser playWithRetry pour Safari
-            await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-            
-            setIsTransitioning(false);
-            setNextVideoSrc(null);
-            
-            // Masquer le score quelques secondes après le démarrage de l'outro
-            setTimeout(() => {
-              setShowScore(false);
-            }, 3000); // 3 secondes après le démarrage
-            
-            // Après 6 secondes, lancer outro_song en parallèle
-            setTimeout(async () => {
-              if (audioRef.current) {
-                audioRef.current.src = getBlobUrl("outro_song");
-                audioRef.current.volume = videoVolume;
-                audioRef.current.loop = false; // Ne pas boucler la musique outro
-                try {
-                  await playWithRetry(audioRef.current);
-                } catch (error) {
-                  console.error("❌ Erreur lecture outro_song:", error);
-                }
-              }
-            }, 6000); // 6 secondes après le démarrage de outro
-          } catch (error: any) {
-            console.error("❌ Erreur lors du lancement de la vidéo outro:", error);
-            if (error.name === 'AbortError') {
-              return;
+      loadAndPlayVideo("outro").then(() => {
+        // Masquer le score quelques secondes après le démarrage
+        setTimeout(() => {
+          setShowScore(false);
+        }, 3000);
+        
+        // Après 6 secondes, lancer outro_song
+        setTimeout(async () => {
+          if (audioRef.current) {
+            audioRef.current.src = getBlobUrl("outro_song");
+            audioRef.current.volume = videoVolume;
+            audioRef.current.loop = false;
+            try {
+              await playWithRetry(audioRef.current);
+            } catch (error) {
+              console.error("❌ Erreur lecture outro_song:", error);
             }
-            setIsTransitioning(false);
-            setNextVideoSrc(null);
           }
-        }
-      };
+        }, 6000);
+      });
     }
     
     setOutroPlayed(true);
@@ -323,43 +323,16 @@ export default function Home() {
 
     // Stocker la vidéo POV suivante
     setNextPOV(nextVideo as "POV_1" | "POV_2" | "POV_3");
-
-    // Précharger la vidéo de transition pour éviter les flashes
-    setIsTransitioning(true);
-    const transitionUrl = getOptimizedVideoUrl(transitionVideo);
-    setNextVideoSrc(transitionUrl);
-
-    // Utiliser la fonction de préchargement optimisée pour mobile
-    preloadVideoForMobile(transitionUrl).then(() => {
-      // Une fois préchargée, faire la transition
-      if (videoRef.current) {
-        videoRef.current.src = transitionUrl;
-        videoRef.current.volume = 0;
-        videoRef.current.load();
-        
-        // Attendre que la vidéo soit chargée puis la lancer
-        videoRef.current.onloadeddata = async () => {
-          if (videoRef.current) {
-            try {
-              await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-              setIsTransitioning(false);
-              setNextVideoSrc(null);
-            } catch (error: any) {
-              if (error?.name === 'AbortError') {
-                return;
-              }
-              console.error("❌ Erreur lecture transition:", error);
-              setIsTransitioning(false);
-              setNextVideoSrc(null);
-            }
-          }
-        };
-      }
-    });
-
+    
     setVideoEnded(false);
     setIsPlaying(true);
     setVideoType("transition");
+    
+    // Charger et lancer la vidéo de transition
+    if (videoRef.current) {
+      videoRef.current.volume = 0;
+      loadAndPlayVideo(transitionVideo);
+    }
   };
 
   // Gestionnaire pour les clics sur les zones interactives
@@ -379,39 +352,11 @@ export default function Home() {
       explanatoryVideoRef.current.currentTime = 0;
     }
 
-    // Précharger la vidéo objet pour éviter les flashes
-    setIsTransitioning(true);
-    const objetUrl = getOptimizedVideoUrl(objetVideo);
-    setNextVideoSrc(objetUrl);
-
-    // Utiliser la fonction de préchargement optimisée pour mobile
-    preloadVideoForMobile(objetUrl).then(() => {
-      // Une fois préchargée, faire la transition
-      if (videoRef.current) {
-        videoRef.current.src = objetUrl;
-        videoRef.current.volume = 0;
-        videoRef.current.load();
-        
-        // Attendre que la vidéo soit chargée puis la lancer
-        videoRef.current.onloadeddata = async () => {
-          if (videoRef.current) {
-            try {
-              // Utiliser playWithRetry pour Safari
-              await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-              setIsTransitioning(false);
-              setNextVideoSrc(null);
-            } catch (error: any) {
-              if (error?.name === 'AbortError') {
-                return;
-              }
-              console.error("❌ Erreur lecture vidéo objet:", error);
-              setIsTransitioning(false);
-              setNextVideoSrc(null);
-            }
-          }
-        };
-      }
-    });
+    // Charger et lancer la vidéo objet
+    if (videoRef.current) {
+      videoRef.current.volume = 0;
+      loadAndPlayVideo(objetVideo);
+    }
 
     // Gérer la musique
     if (audioRef.current) {
@@ -488,28 +433,7 @@ export default function Home() {
         setCurrentVideo("lit_vers_1" as any);
         if (videoRef.current) {
           videoRef.current.volume = 0; // Pas de son pour les vidéos lit
-          
-          // Pour Safari/iOS, utiliser Blob URL
-          if (isSafari || isIOS) {
-            const litUrl = getOptimizedVideoUrlWithRange("lit_vers_1");
-            loadAndPlayVideoSafari(litUrl);
-          } else {
-            // Pour les autres navigateurs
-            setTimeout(() => {
-              if (videoRef.current) {
-                videoRef.current.load();
-                videoRef.current.addEventListener('loadeddata', async () => {
-                  if (videoRef.current) {
-                    try {
-                      await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-                    } catch (error) {
-                      console.error("❌ Erreur lecture lit_vers_1:", error);
-                    }
-                  }
-                }, { once: true });
-              }
-            }, 100);
-          }
+          loadAndPlayVideo("lit_vers_1");
         }
         setVideoEnded(false);
       }
@@ -532,49 +456,20 @@ export default function Home() {
         setVideoType("POV");
         if (videoRef.current) {
           videoRef.current.volume = 0; // Pas de son pour les vidéos POV
-          // Attendre que le JSX mette à jour le src, puis charger
-          setTimeout(() => {
-            if (videoRef.current) {
-              videoRef.current.load();
-              // Lancer la lecture après le chargement
-              videoRef.current.addEventListener('loadeddata', async () => {
-                if (videoRef.current) {
-                  try {
-                    await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-                  } catch (error) {
-                    console.error("❌ Erreur lecture POV_1 après lit:", error);
-                  }
-                }
-              }, { once: true });
-            }
-          }, 100);
+          loadAndPlayVideo("POV_1");
         }
         setVideoEnded(false);
       }
       // Si c'est une vidéo de transition (numero_vers_numero), on vérifie si elle est terminée
       else if (videoType === "transition" && videoRef.current.ended && nextPOV) {
         // Passer à la vidéo POV correspondante
+        const povToPlay = nextPOV;
         setCurrentVideo(nextPOV);
         setNextPOV(null);
         setVideoType("POV");
         if (videoRef.current) {
           videoRef.current.volume = 0;
-          // Attendre que le JSX mette à jour le src, puis charger
-          setTimeout(() => {
-            if (videoRef.current) {
-              videoRef.current.load();
-              // Lancer la lecture après le chargement
-              videoRef.current.addEventListener('loadeddata', async () => {
-                if (videoRef.current) {
-                  try {
-                    await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-                  } catch (error) {
-                    console.error("❌ Erreur lecture POV après transition:", error);
-                  }
-                }
-              }, { once: true });
-            }
-          }, 100);
+          loadAndPlayVideo(povToPlay);
         }
       }
       // Séquence de fin de jeu
@@ -587,35 +482,11 @@ export default function Home() {
           // Continuer outro_song pendant le générique (ne pas l'arrêter)
           // La musique outro_song continue automatiquement
           
-          // Précharger la vidéo générique pour éviter les flashes
-          setIsTransitioning(true);
-          const generiqueUrl = getBlobUrl("generique");
-          setNextVideoSrc(generiqueUrl);
-
-          // Préchargement direct pour generique
+          // Charger et lancer le générique
           if (videoRef.current) {
-            videoRef.current.src = generiqueUrl;
-            videoRef.current.volume = 0; // Pas de son pour le générique
-            videoRef.current.muted = true; // Son coupé pour le générique
-            videoRef.current.load();
-            
-            videoRef.current.onloadeddata = async () => {
-              if (videoRef.current) {
-                try {
-                  // Utiliser playWithRetry pour Safari
-                  await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-                  setIsTransitioning(false);
-                  setNextVideoSrc(null);
-                } catch (error: any) {
-                  console.error("❌ Erreur lecture générique:", error);
-                  if (error.name === 'AbortError') {
-                    return;
-                  }
-                  setIsTransitioning(false);
-                  setNextVideoSrc(null);
-                }
-              }
-            };
+            videoRef.current.volume = 0;
+            videoRef.current.muted = true;
+            loadAndPlayVideo("generique");
           }
           
           setGeneriquePlayed(true);
@@ -684,52 +555,19 @@ export default function Home() {
       await unlockAudioFromGesture();
     }
 
-    // Démarrer la vidéo et l'audio
+    // Charger et démarrer la vidéo
+    await loadAndPlayVideo(currentVideo);
+    
+    // Gérer l'audio
     if (videoRef.current && audioRef.current) {
-      const videoUrl = getOptimizedVideoUrl(currentVideo);
-      
-      // Pour Safari/iOS : utiliser Blob URL avec bon Content-Type
-      if (isSafari || isIOS) {
-        try {
-          // Fetch et créer Blob URL avec type video/mp4
-          const response = await fetch(videoUrl);
-          const blob = await response.blob();
-          const videoBlob = new Blob([blob], { type: 'video/mp4' });
-          const blobUrl = URL.createObjectURL(videoBlob);
-          
-          videoRef.current.muted = true;
-          videoRef.current.src = blobUrl;
-          await videoRef.current.play();
-          
-          // Unmute pour la vidéo d'introduction
-          if (currentVideo === "introduction") {
-            setTimeout(() => {
-              if (videoRef.current) {
-                videoRef.current.muted = false;
-                videoRef.current.volume = videoVolume;
-              }
-            }, 200);
-          }
-        } catch (error) {
-          console.error("Erreur lecture Safari:", error);
-        }
-      } else {
-        // Mode non-Safari
-        if (videoRef.current.src !== videoUrl) {
-          videoRef.current.src = videoUrl;
-          videoRef.current.load();
-        }
-        
-        try {
-          await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-        } catch (error) {
-          console.error("Erreur lecture vidéo:", error);
-        }
-      }
-      
       if (currentVideo === "introduction") {
-        videoRef.current.volume = videoVolume;
-        videoRef.current.muted = false;
+        // Unmute pour la vidéo d'introduction
+        setTimeout(() => {
+          if (videoRef.current) {
+            videoRef.current.muted = false;
+            videoRef.current.volume = videoVolume;
+          }
+        }, 200);
         audioRef.current.pause();
       } else {
         videoRef.current.volume = 0;
@@ -785,42 +623,8 @@ export default function Home() {
 
   // Gestionnaire pour démarrer la vidéo une fois chargée
   const handleVideoLoaded = async () => {
-    
-    // Auto-démarrer les vidéos lit après chargement
-    if (videoType === "lit" && videoRef.current) {
-      try {
-        await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-      } catch (error: any) {
-        if (error?.name === 'AbortError') {
-          return;
-        }
-        console.error("❌ Erreur lecture lit après chargement:", error);
-      }
-    }
-    
-    // Auto-démarrer les vidéos POV après chargement
-    if (videoType === "POV" && videoRef.current) {
-      try {
-        await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-      } catch (error: any) {
-        if (error?.name === 'AbortError') {
-          return;
-        }
-        console.error("❌ Erreur lecture POV après chargement:", error);
-      }
-    }
-    
-    // Auto-démarrer les vidéos de transition après chargement
-    if (videoType === "transition" && videoRef.current) {
-      try {
-        await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-      } catch (error: any) {
-        if (error?.name === 'AbortError') {
-          return;
-        }
-        console.error("❌ Erreur lecture transition après chargement:", error);
-      }
-    }
+    // Les vidéos sont maintenant gérées par loadAndPlayVideo
+    // Ce handler n'est plus utilisé pour l'auto-start
   };
 
   const handleReturn = async () => {
@@ -847,13 +651,13 @@ export default function Home() {
       }
     }
 
-    // Enfin, on charge la vidéo d'introduction (éviter le log multiple)
-    if (videoRef.current) {
-      videoRef.current.src = introductionUrl;
-      videoRef.current.currentTime = videoEndTimes.introduction;
-      videoRef.current.volume = 0;
-      videoRef.current.pause();
-    }
+    // Enfin, on charge la vidéo d'introduction
+    loadAndPlayVideo("introduction").then(() => {
+      if (videoRef.current) {
+        videoRef.current.currentTime = videoEndTimes.introduction;
+        videoRef.current.pause();
+      }
+    });
   };
 
   // Gestionnaire pour retourner à la vidéo POV
@@ -891,48 +695,32 @@ export default function Home() {
 
     setCurrentVideo(povVideo);
     setVideoType("POV");
+    setVideoEnded(false);
+    setIsPlaying(true);
     
     // Charger et lancer la vidéo POV
     if (videoRef.current) {
-      videoRef.current.volume = 0; // Pas de son pour les vidéos POV
-      // Attendre que le JSX mette à jour le src, puis charger
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.load();
-          // Lancer la lecture après le chargement
-          videoRef.current.addEventListener('loadeddata', async () => {
-            if (videoRef.current) {
-              try {
-                await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-              } catch (error) {
-                console.error("❌ Erreur lecture POV après retour:", error);
-              }
-            }
-          }, { once: true });
-        }
-      }, 100);
+      videoRef.current.volume = 0;
+      loadAndPlayVideo(povVideo);
     }
     
     // Reprendre la musique principale avec un fondu à la position sauvegardée
     if (audioRef.current) {
       setIsFading(true);
-      fadeAudio(audioRef.current, 0, 500); // Fade out sur 500ms
+      fadeAudio(audioRef.current, 0, 500);
 
       setTimeout(async () => {
         if (audioRef.current) {
-          // Ne pas recharger la source si c'est déjà main_song
           if (audioRef.current.src !== getBlobUrl("main_song")) {
             audioRef.current.src = getBlobUrl("main_song");
             audioRef.current.load();
           }
           audioRef.current.volume = 0;
-          
-          // Reprendre à la position sauvegardée
           audioRef.current.currentTime = mainMusicPosition;
           
           try {
             await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-            fadeAudio(audioRef.current, videoVolume, 500); // Fade in sur 500ms
+            fadeAudio(audioRef.current, videoVolume, 500);
             setIsFading(false);
           } catch (error) {
             console.error("❌ Erreur reprise main_song:", error);
@@ -941,43 +729,6 @@ export default function Home() {
         }
       }, 500);
     }
-
-    // Précharger la vidéo POV pour éviter les flashes
-    setIsTransitioning(true);
-    const povUrl = getOptimizedVideoUrl(povVideo);
-    setNextVideoSrc(povUrl);
-
-    // Utiliser la fonction de préchargement optimisée pour mobile
-    preloadVideoForMobile(povUrl).then(() => {
-      // Une fois préchargée, faire la transition
-      if (videoRef.current) {
-        // D'abord, on arrête la vidéo actuelle
-        videoRef.current.pause();
-        videoRef.current.currentTime = 0;
-        
-        // Ensuite, on change la source
-        videoRef.current.src = povUrl;
-        videoRef.current.volume = 0;
-        
-        // On attend que la vidéo soit chargée avant de la lancer
-        videoRef.current.onloadeddata = async () => {
-          if (videoRef.current) {
-            videoRef.current.currentTime = 0;
-            try {
-              await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-              setVideoEnded(false);
-              setIsPlaying(true);
-              setIsTransitioning(false);
-              setNextVideoSrc(null);
-            } catch (error) {
-              console.error("❌ Erreur lecture POV après préchargement:", error);
-              setIsTransitioning(false);
-              setNextVideoSrc(null);
-            }
-          }
-        };
-      }
-    });
   };
 
   // Gestionnaire pour la fin de la musique principale
@@ -1104,21 +855,10 @@ export default function Home() {
         <video
           ref={videoRef}
           className="w-full h-full object-cover pointer-events-none"
-          src={
-            // Sur Safari/iOS, le src est géré manuellement dans handlePlay pour l'intro
-            // Pour les autres vidéos, utiliser l'URL normale
-            (isSafari || isIOS) && currentVideo === "introduction" 
-              ? undefined
-              : currentVideo === "introduction" 
-              ? introductionUrl 
-              : currentVideo === "outro" || currentVideo === "generique"
-              ? getBlobUrl(currentVideo)
-              : getOptimizedVideoUrlWithRange(currentVideo)
-          }
           playsInline
           webkit-playsinline="true"
           preload="none"
-          muted={true}
+          muted={isMobile || isSafari || isIOS}
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
           onError={(e) => console.error('❌ Erreur vidéo:', e)}
