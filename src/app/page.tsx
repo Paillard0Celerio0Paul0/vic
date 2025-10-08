@@ -62,6 +62,23 @@ export default function Home() {
 
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  // Fonction helper pour charger et jouer une vidéo sur Safari avec Blob URL
+  const loadAndPlayVideoSafari = async (videoUrl: string) => {
+    if (!videoRef.current) return;
+    
+    try {
+      const response = await fetch(videoUrl);
+      const blob = await response.blob();
+      const videoBlob = new Blob([blob], { type: 'video/mp4' });
+      const blobUrl = URL.createObjectURL(videoBlob);
+      
+      videoRef.current.src = blobUrl;
+      await videoRef.current.play();
+    } catch (error) {
+      console.error("Erreur chargement vidéo Safari:", error);
+    }
+  };
+
   const unlockAudioFromGesture = async () => {
     if (!audioRef.current) return;
     try {
@@ -466,28 +483,33 @@ export default function Home() {
       }
       
       // À 1:10 (70 secondes) de la vidéo d'introduction : lancer automatiquement lit_vers_1
-      if (currentVideo === "introduction" && videoRef.current.currentTime >= 68) {
+      if (currentVideo === "introduction" && videoRef.current.currentTime >= 68 && videoType === "introduction") {
         setVideoType("lit");
         setCurrentVideo("lit_vers_1" as any);
-        // Ne pas modifier src ici, laisser le JSX gérer le changement
         if (videoRef.current) {
           videoRef.current.volume = 0; // Pas de son pour les vidéos lit
-          // Attendre que le JSX mette à jour le src, puis charger
-          setTimeout(() => {
-            if (videoRef.current) {
-              videoRef.current.load();
-              // Lancer la lecture après le chargement
-              videoRef.current.addEventListener('loadeddata', async () => {
-                if (videoRef.current) {
-                  try {
-                    await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-                  } catch (error) {
-                    console.error("❌ Erreur lecture lit_vers_1:", error);
+          
+          // Pour Safari/iOS, utiliser Blob URL
+          if (isSafari || isIOS) {
+            const litUrl = getOptimizedVideoUrlWithRange("lit_vers_1");
+            loadAndPlayVideoSafari(litUrl);
+          } else {
+            // Pour les autres navigateurs
+            setTimeout(() => {
+              if (videoRef.current) {
+                videoRef.current.load();
+                videoRef.current.addEventListener('loadeddata', async () => {
+                  if (videoRef.current) {
+                    try {
+                      await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+                    } catch (error) {
+                      console.error("❌ Erreur lecture lit_vers_1:", error);
+                    }
                   }
-                }
-              }, { once: true });
-            }
-          }, 100);
+                }, { once: true });
+              }
+            }, 100);
+          }
         }
         setVideoEnded(false);
       }
@@ -1082,6 +1104,17 @@ export default function Home() {
         <video
           ref={videoRef}
           className="w-full h-full object-cover pointer-events-none"
+          src={
+            // Sur Safari/iOS, le src est géré manuellement dans handlePlay pour l'intro
+            // Pour les autres vidéos, utiliser l'URL normale
+            (isSafari || isIOS) && currentVideo === "introduction" 
+              ? undefined
+              : currentVideo === "introduction" 
+              ? introductionUrl 
+              : currentVideo === "outro" || currentVideo === "generique"
+              ? getBlobUrl(currentVideo)
+              : getOptimizedVideoUrlWithRange(currentVideo)
+          }
           playsInline
           webkit-playsinline="true"
           preload="none"
