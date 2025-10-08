@@ -733,6 +733,13 @@ export default function Home() {
           try {
             debugLog('🔄 Plan C - Fetch et Blob...');
             const response = await fetch(videoUrl);
+            
+            // Log taille et type
+            const contentLength = response.headers.get('content-length');
+            const contentType = response.headers.get('content-type');
+            debugLog('📦 Taille: ' + (contentLength ? (parseInt(contentLength) / 1024 / 1024).toFixed(2) + 'MB' : 'unknown'));
+            debugLog('📄 Type: ' + contentType);
+            
             const blob = await response.blob();
             const blobUrl = URL.createObjectURL(blob);
             debugLog('✅ Blob URL créé: ' + blobUrl.substring(0, 40) + '...');
@@ -752,6 +759,28 @@ export default function Home() {
           } catch (blobError: any) {
             debugLog('❌ Blob failed: ' + blobError.message);
             debugLog('📊 Final state - ready: ' + videoRef.current.readyState + ' network: ' + videoRef.current.networkState);
+            
+            // Plan D : Test avec vidéo simple pour diagnostiquer
+            try {
+              debugLog('🧪 Test vidéo simple...');
+              // Vidéo test MP4 basique hébergée publiquement
+              const testUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+              videoRef.current.src = testUrl;
+              await videoRef.current.play();
+              debugLog('✅ Test vidéo OK ! Problème = format/codec de votre vidéo');
+            } catch (testError: any) {
+              debugLog('❌ Test vidéo failed: ' + testError.message);
+              
+              // Diagnostics finaux
+              const video = videoRef.current;
+              debugLog('🔍 Diagnostics:');
+              debugLog('- canPlayType(mp4): ' + video.canPlayType('video/mp4'));
+              debugLog('- canPlayType(mp4;h264): ' + video.canPlayType('video/mp4; codecs="avc1.42E01E"'));
+              debugLog('- canPlayType(webm): ' + video.canPlayType('video/webm'));
+              debugLog('- autoplay: ' + video.autoplay);
+              debugLog('- controls: ' + video.controls);
+              debugLog('- URL longueur: ' + videoUrl.length);
+            }
           }
         }
       } else {
@@ -1149,22 +1178,18 @@ export default function Home() {
         <video
           ref={videoRef}
           className="w-full h-full object-cover pointer-events-none"
-          src={
-            currentVideo === "introduction" 
-              ? introductionUrl 
-              : currentVideo === "outro" || currentVideo === "generique"
-              ? getBlobUrl(currentVideo)
-              : getOptimizedVideoUrlWithRange(currentVideo)
-          }
           playsInline
           webkit-playsinline="true"
-          autoPlay={false}
-          preload={isSafari ? "metadata" : (currentVideo === "outro" || currentVideo === "generique" ? "metadata" : "none")}
-          crossOrigin={isSafari || isIOS ? undefined : "anonymous"}
-          muted={(isMobile || isSafari || isIOS) && currentVideo !== "introduction"} // Important pour mobile/Safari/iOS, sauf introduction
+          preload="none"
+          muted={true}
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
-          onError={(e) => console.error('❌ Erreur vidéo principale:', e)}
+          onError={(e) => {
+            console.error('❌ Erreur vidéo principale:', e);
+            if (videoRef.current && videoRef.current.error) {
+              debugLog('🚨 Video error: code=' + videoRef.current.error.code + ' msg=' + videoRef.current.error.message);
+            }
+          }}
           style={{
             width: '100%',
             height: '100%',
