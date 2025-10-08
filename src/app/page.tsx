@@ -644,9 +644,9 @@ export default function Home() {
       setIsPlaying(true);
       setVideoEnded(false);
 
+      // Unlock audio en parallèle, ne pas bloquer la vidéo
       if (audioRef.current && (isIOS || isSafari) && !audioUnlocked) {
-        setDebugMessage("🔓 Unlock audio...");
-        await unlockAudioFromGesture();
+        unlockAudioFromGesture().catch(e => console.log("Unlock audio skip:", e));
       }
 
       setDebugMessage("📹 Lancement vidéo...");
