@@ -732,28 +732,54 @@ muted={true}  // Au lieu de muted={false}
 - Connexion mobile peut être lente
 - C'est le prix à payer pour contourner le Content-Type incorrect
 
-### 🚀 Optimisation - Préchargement main_song
+### 🚀 Optimisation - Préchargement + Play à 40s
 
-**Solution implémentée** : Précharger main_song **pendant l'intro**
+**Problème** : Si on démarre main_song en muted dès le début, à 40s on est déjà à 00:40 de la musique !
+
+**Solution finale** : Précharger le Blob, mais **play() uniquement à 40s**
 
 ```typescript
-// Au démarrage de l'intro, lancer le téléchargement en arrière-plan
+// Dans handlePlay (clic sur "Commencer") - Safari/iOS uniquement
+// 1. Unlock audio
+audioRef.current.muted = true;
+audioRef.current.volume = 0;
+await audioRef.current.play();
+audioRef.current.pause();
+setAudioUnlocked(true); // ✅ Audio maintenant déverrouillé
+
+// 2. Précharger main_song (télécharger en arrière-plan)
 const response = await fetch(audioUrl);
 const blob = await response.blob();
 const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
 const blobUrl = URL.createObjectURL(audioBlob);
-setPreloadedMainSongUrl(blobUrl); // Stocker pour utilisation à 40s
+setPreloadedMainSongUrl(blobUrl); // ✅ Prêt pour 40s
 
-// À 40s, utiliser le Blob préchargé
-if (audioId === "main_song" && preloadedMainSongUrl) {
-  audioRef.current.src = preloadedMainSongUrl; // ✅ Instantané !
+// À 40s dans handleTimeUpdate
+if (preloadedMainSongUrl) {
+  audioRef.current.muted = true; // Démarrer en muted
+  audioRef.current.src = preloadedMainSongUrl;
+  audioRef.current.load();
+  await audioRef.current.play(); // ✅ Fonctionne (audio unlocked + muted)
+  
+  // Unmute après 100ms
+  setTimeout(() => {
+    audioRef.current.muted = false;
+    audioRef.current.volume = videoVolume;
+  }, 100);
 }
 ```
 
-**Résultat attendu** :
-- Téléchargement démarre dès le clic sur "Commencer"
-- À 40s, le fichier est déjà prêt
-- main_song démarre **instantanément** (ou presque)
+**Pourquoi ça fonctionne** :
+1. ✅ **Audio unlocked** lors du clic "Commencer"
+2. ✅ **Blob préchargé** → Pas de délai à 40s
+3. ✅ **Play() à 40s** → Musique démarre à 00:00
+4. ✅ **Muted au départ** → Safari autorise
+5. ✅ **Unmute immédiat** → Son s'active tout de suite
+
+**Résultat** :
+- main_song démarre à **00:00** (pas à 00:40)
+- Démarrage **quasi-instantané** à 40s
+- Expérience fluide sur iOS
 
 ### 📊 Bilan final
 

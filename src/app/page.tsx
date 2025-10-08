@@ -640,23 +640,53 @@ export default function Home() {
   // Gestionnaire pour vérifier le temps de la vidéo
   const handleTimeUpdate = () => {
     if (videoRef.current) {
-      // À 40 secondes de la vidéo d'introduction : lancer la musique
+      // À 40 secondes de la vidéo d'introduction : démarrer main_song
       if (currentVideo === "introduction" && videoRef.current.currentTime >= 40 && audioRef.current) {
-        if (audioRef.current.paused) {
+        if (audioRef.current.paused && !mainSongUnmuted) {
           setDebugMessage("🎵 Déclenchement main_song...");
+          setMainSongUnmuted(true); // Éviter les déclenchements multiples
+          
           (async () => {
             try {
-              if ((isIOS || isSafari) && !audioUnlocked) {
-                await unlockAudioFromGesture();
+              if ((isIOS || isSafari)) {
+                // Utiliser le Blob préchargé si disponible
+                if (preloadedMainSongUrl) {
+                  console.log("✅ Utilisation main_song préchargé");
+                  setDebugMessage("▶️ Lecture main_song...");
+                  
+                  // Démarrer en muted (unlock déjà fait lors du clic "Commencer")
+                  audioRef.current!.muted = true;
+                  audioRef.current!.volume = 0;
+                  audioRef.current!.loop = true;
+                  audioRef.current!.src = preloadedMainSongUrl;
+                  audioRef.current!.load();
+                  await audioRef.current!.play();
+                  
+                  // Unmute immédiatement
+                  setTimeout(() => {
+                    if (audioRef.current) {
+                      audioRef.current.muted = false;
+                      audioRef.current.volume = videoVolume;
+                      console.log("✅ main_song démarré et unmuted");
+                      setDebugMessage("✅ Audio OK");
+                      setTimeout(() => setDebugMessage(""), 2000);
+                    }
+                  }, 100);
+                } else {
+                  // Fallback : télécharger maintenant
+                  console.log("⚠️ main_song pas préchargé, téléchargement...");
+                  await loadAndPlayAudio("main_song");
+                  audioRef.current!.volume = videoVolume;
+                }
+              } else {
+                // Desktop
+                await loadAndPlayAudio("main_song");
+                audioRef.current!.volume = videoVolume;
               }
-              // Charger et jouer main_song avec Blob URL pour Safari
-              await loadAndPlayAudio("main_song");
-              audioRef.current!.volume = videoVolume;
-              setNeedAudioEnableUI(false);
             } catch (error) {
               console.error("❌ Erreur lecture main_song:", error);
               setDebugMessage("❌ Erreur main_song");
-              setNeedAudioEnableUI(true);
+              setMainSongUnmuted(false); // Permettre un retry
             }
           })();
         }
@@ -794,6 +824,7 @@ export default function Home() {
 
   // État pour stocker le Blob URL de main_song préchargé
   const [preloadedMainSongUrl, setPreloadedMainSongUrl] = useState<string | null>(null);
+  const [mainSongUnmuted, setMainSongUnmuted] = useState(false);
 
   const handlePlay = async () => {
     try {
@@ -801,12 +832,25 @@ export default function Home() {
       setIsPlaying(true);
       setVideoEnded(false);
 
-      // Unlock audio en parallèle, ne pas bloquer la vidéo
-      if (audioRef.current && (isIOS || isSafari) && !audioUnlocked) {
-        unlockAudioFromGesture().catch(e => console.log("Unlock audio skip:", e));
+      // IMPORTANT : Unlock audio IMMÉDIATEMENT sur Safari/iOS
+      if (audioRef.current && (isIOS || isSafari)) {
+        console.log("🔓 Unlock audio via interaction utilisateur...");
+        try {
+          // Forcer le unlock en jouant un silence
+          audioRef.current.muted = true;
+          audioRef.current.volume = 0;
+          audioRef.current.src = ''; // Reset
+          await audioRef.current.play().catch(() => {});
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          setAudioUnlocked(true);
+          console.log("✅ Audio unlocked");
+        } catch (e) {
+          console.log("⚠️ Audio unlock échoué:", e);
+        }
       }
 
-      // Précharger main_song en arrière-plan pour Safari/iOS
+      // Pour Safari/iOS : Précharger main_song (télécharger mais ne pas jouer)
       if ((isSafari || isIOS) && currentVideo === "introduction" && !preloadedMainSongUrl) {
         console.log("🎵 Préchargement main_song en arrière-plan...");
         (async () => {
@@ -817,7 +861,7 @@ export default function Home() {
             const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
             const blobUrl = URL.createObjectURL(audioBlob);
             setPreloadedMainSongUrl(blobUrl);
-            console.log("✅ main_song préchargé:", blobUrl);
+            console.log("✅ main_song préchargé (prêt pour 40s):", blobUrl);
           } catch (error) {
             console.error("❌ Erreur préchargement main_song:", error);
           }
@@ -836,7 +880,10 @@ export default function Home() {
           if (!isSafari && !isIOS) {
             videoRef.current.volume = videoVolume;
           }
-          audioRef.current.pause();
+          // Ne pas pause() audioRef pour Safari/iOS car main_song est déjà en lecture muted
+          if (!isSafari && !isIOS) {
+            audioRef.current.pause();
+          }
         } else {
           videoRef.current.volume = 0;
           try {
