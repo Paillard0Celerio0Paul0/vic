@@ -78,6 +78,15 @@ export default function Home() {
         videoUrl = getOptimizedVideoUrlWithRange(videoId);
       }
       
+      // Configurer le muted selon la vidéo AVANT de charger
+      const needsSound = videoId === "introduction" || videoId === "outro";
+      if (isSafari || isIOS) {
+        // Sur Safari/iOS, toujours démarrer muted pour l'autoplay
+        videoRef.current.muted = true;
+      } else {
+        videoRef.current.muted = !needsSound;
+      }
+      
       // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
       if (isSafari || isIOS) {
         const response = await fetch(videoUrl);
@@ -87,6 +96,15 @@ export default function Home() {
         
         videoRef.current.src = blobUrl;
         await videoRef.current.play();
+        
+        // Unmute après démarrage si la vidéo a besoin de son
+        if (needsSound) {
+          setTimeout(() => {
+            if (videoRef.current) {
+              videoRef.current.muted = false;
+            }
+          }, 100);
+        }
       } else {
         // Pour les autres navigateurs
         videoRef.current.src = videoUrl;
@@ -95,6 +113,60 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Erreur chargement vidéo:", error);
+    }
+  };
+
+  // Fonction pour charger et jouer un audio sur Safari/iOS
+  const loadAndPlayAudio = async (audioId: string) => {
+    if (!audioRef.current) return;
+    
+    try {
+      const audioUrl = getBlobUrl(audioId);
+      
+      // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
+      if (isSafari || isIOS) {
+        const response = await fetch(audioUrl);
+        const blob = await response.blob();
+        // Déterminer le type MIME correct
+        const mimeType = audioId.includes('song') ? 'audio/mpeg' : 'audio/mp4';
+        const audioBlob = new Blob([blob], { type: mimeType });
+        const blobUrl = URL.createObjectURL(audioBlob);
+        
+        audioRef.current.src = blobUrl;
+      } else {
+        audioRef.current.src = audioUrl;
+      }
+      
+      audioRef.current.load();
+      await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+    } catch (error) {
+      console.error("Erreur chargement audio:", error);
+    }
+  };
+
+  // Fonction pour charger et jouer une vidéo explicative (text_x)
+  const loadAndPlayExplanatoryVideo = async (videoId: string) => {
+    if (!explanatoryVideoRef.current) return;
+    
+    try {
+      const videoUrl = getOptimizedVideoUrlNoRange(videoId);
+      
+      // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
+      if (isSafari || isIOS) {
+        const response = await fetch(videoUrl);
+        const blob = await response.blob();
+        const videoBlob = new Blob([blob], { type: 'video/mp4' });
+        const blobUrl = URL.createObjectURL(videoBlob);
+        
+        explanatoryVideoRef.current.src = blobUrl;
+      } else {
+        explanatoryVideoRef.current.src = videoUrl;
+      }
+      
+      explanatoryVideoRef.current.load();
+      await playWithRetry(explanatoryVideoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+    } catch (error) {
+      console.error("Erreur chargement vidéo explicative:", error);
     }
   };
 
@@ -189,10 +261,16 @@ export default function Home() {
     
     // Charger et lancer la vidéo outro
     if (videoRef.current) {
-      videoRef.current.volume = 1.0;
-      videoRef.current.muted = false;
-      
       loadAndPlayVideo("outro").then(() => {
+        // Le volume et unmute sont gérés dans loadAndPlayVideo
+        setIsTransitioning(false);
+        setNextVideoSrc(null);
+        
+        // Assurer le bon volume pour la vidéo outro
+        if (videoRef.current) {
+          videoRef.current.volume = 1.0;
+        }
+        
         // Masquer le score quelques secondes après le démarrage
         setTimeout(() => {
           setShowScore(false);
@@ -201,11 +279,10 @@ export default function Home() {
         // Après 6 secondes, lancer outro_song
         setTimeout(async () => {
           if (audioRef.current) {
-            audioRef.current.src = getBlobUrl("outro_song");
             audioRef.current.volume = videoVolume;
             audioRef.current.loop = false;
             try {
-              await playWithRetry(audioRef.current);
+              await loadAndPlayAudio("outro_song");
             } catch (error) {
               console.error("❌ Erreur lecture outro_song:", error);
             }
@@ -372,11 +449,9 @@ export default function Home() {
         // Après le fade out, on change la source et on fait un fade in
         setTimeout(async () => {
           if (audioRef.current) {
-            audioRef.current.src = getBlobUrl(`${objetType}_song`);
             audioRef.current.volume = 0;
-            audioRef.current.load();
             try {
-              await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+              await loadAndPlayAudio(`${objetType}_song`);
               fadeAudio(audioRef.current, videoVolume, 500); // Fade in sur 500ms
               setIsFading(false);
             } catch (error) {
@@ -406,10 +481,8 @@ export default function Home() {
               if ((isIOS || isSafari) && !audioUnlocked) {
                 await unlockAudioFromGesture();
               }
-              // Charger et jouer main_song
-              audioRef.current!.src = getBlobUrl("main_song");
-              audioRef.current!.load();
-              await playWithRetry(audioRef.current!, { maxAttempts: 5, baseDelayMs: 300 });
+              // Charger et jouer main_song avec Blob URL pour Safari
+              await loadAndPlayAudio("main_song");
               audioRef.current!.volume = videoVolume;
               setNeedAudioEnableUI(false);
             } catch (error) {
@@ -484,9 +557,12 @@ export default function Home() {
           
           // Charger et lancer le générique
           if (videoRef.current) {
-            videoRef.current.volume = 0;
-            videoRef.current.muted = true;
-            loadAndPlayVideo("generique");
+            loadAndPlayVideo("generique").then(() => {
+              if (videoRef.current) {
+                videoRef.current.volume = 0;
+                videoRef.current.muted = true;
+              }
+            });
           }
           
           setGeneriquePlayed(true);
@@ -514,15 +590,12 @@ export default function Home() {
         
         // Déclencher la vidéo explicative au bon timing
         if (timing && videoRef.current.currentTime >= timing && explanatoryVideo) {
-      
-          
           if (!showExplanatoryVideo) {
             setShowExplanatoryVideo(true);
             
-            // Charger la vidéo explicative (le démarrage se fera automatiquement via onCanPlay)
+            // Charger et jouer la vidéo explicative
             if (explanatoryVideoRef.current) {
-              // Ne pas modifier src ici, laisser le JSX gérer le changement
-              explanatoryVideoRef.current.load();
+              loadAndPlayExplanatoryVideo(explanatoryVideo);
             }
           }
         }
@@ -561,13 +634,10 @@ export default function Home() {
     // Gérer l'audio
     if (videoRef.current && audioRef.current) {
       if (currentVideo === "introduction") {
-        // Unmute pour la vidéo d'introduction
-        setTimeout(() => {
-          if (videoRef.current) {
-            videoRef.current.muted = false;
-            videoRef.current.volume = videoVolume;
-          }
-        }, 200);
+        // Volume géré dans loadAndPlayVideo
+        if (videoRef.current) {
+          videoRef.current.volume = videoVolume;
+        }
         audioRef.current.pause();
       } else {
         videoRef.current.volume = 0;
@@ -642,9 +712,9 @@ export default function Home() {
 
     // Reprendre la musique principale si elle était en pause
     if (audioRef.current && audioRef.current.paused) {
-      audioRef.current.currentTime = mainMusicPosition;
       try {
-        await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+        await loadAndPlayAudio("main_song");
+        audioRef.current.currentTime = mainMusicPosition;
         audioRef.current.volume = videoVolume;
       } catch (error) {
         console.error("❌ Erreur reprise audio après retour:", error);
@@ -711,15 +781,12 @@ export default function Home() {
 
       setTimeout(async () => {
         if (audioRef.current) {
-          if (audioRef.current.src !== getBlobUrl("main_song")) {
-            audioRef.current.src = getBlobUrl("main_song");
-            audioRef.current.load();
-          }
           audioRef.current.volume = 0;
-          audioRef.current.currentTime = mainMusicPosition;
           
           try {
-            await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+            await loadAndPlayAudio("main_song");
+            // Reprendre à la position sauvegardée
+            audioRef.current.currentTime = mainMusicPosition;
             fadeAudio(audioRef.current, videoVolume, 500);
             setIsFading(false);
           } catch (error) {
@@ -858,7 +925,7 @@ export default function Home() {
           playsInline
           webkit-playsinline="true"
           preload="none"
-          muted={isMobile || isSafari || isIOS}
+          muted={currentVideo === "introduction" || currentVideo === "outro" ? false : true}
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
           onError={(e) => console.error('❌ Erreur vidéo:', e)}
@@ -881,88 +948,32 @@ export default function Home() {
         {/* Audio pour la musique de fond */}
         <audio
           ref={audioRef}
-          src={getBlobUrl("main_song")}
           loop
-          preload={isSafari ? "metadata" : "none"}
-          crossOrigin={isSafari || isIOS ? undefined : "anonymous"}
+          preload="none"
         />
         
         {/* Vidéo explicative superposée */}
-        {showExplanatoryVideo && explanatoryVideo && (() => {
-          const videoUrl = getOptimizedVideoUrlNoRange(explanatoryVideo);
-          return (
-            <video
-              ref={explanatoryVideoRef}
-              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-              src={videoUrl}
-              playsInline
-              webkit-playsinline="true"
-              preload="metadata"
-              crossOrigin={isSafari || isIOS ? undefined : "anonymous"}
-              muted={false}
+        {showExplanatoryVideo && explanatoryVideo && (
+          <video
+            ref={explanatoryVideoRef}
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+            playsInline
+            webkit-playsinline="true"
+            preload="none"
+            muted={false}
             style={{
               width: '100%',
               height: '100%',
-              objectFit: isMobile ? 'contain' : 'cover', // contain sur mobile pour éviter le rognage
-              zIndex: 15, // Plus élevé que la vidéo principale (zIndex: 0)
+              objectFit: isMobile ? 'contain' : 'cover',
+              zIndex: 15,
               opacity: 1,
               transition: 'opacity 0.5s ease-in-out',
-              backgroundColor: isMobile ? 'black' : 'transparent', // Fond noir sur mobile pour objectFit contain
-              // Mode de fusion pour rendre le noir transparent
-              mixBlendMode: 'screen', // Essaie ceci d'abord
-              // Ou utilisez 'screen' pour éclaircir
-              // Ou 'overlay' pour un effet différent
+              backgroundColor: isMobile ? 'black' : 'transparent',
+              mixBlendMode: 'screen',
             }}
-            onCanPlay={async () => {
-              // Démarrer automatiquement la vidéo explicative
-              if (explanatoryVideoRef.current) {
-                try {
-                  // Pour Safari, charger explicitement la vidéo avant de jouer
-                  if (isSafari) {
-                    explanatoryVideoRef.current.load();
-                    // Attendre un peu que le load se fasse
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                  }
-                  
-                  // Utiliser playWithRetry pour Safari
-                  await playWithRetry(explanatoryVideoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-                } catch (error: any) {
-                  console.error(`❌ Erreur lancement vidéo explicative ${explanatoryVideo}:`, error);
-                  if (error?.name === 'AbortError') {
-                    return;
-                  }
-                  
-                  // Fallback pour Safari: essayer avec muted puis unmute
-                  if (isSafari && explanatoryVideoRef.current) {
-                    try {
-                      explanatoryVideoRef.current.muted = true;
-                      await explanatoryVideoRef.current.play();
-                      explanatoryVideoRef.current.muted = false;
-                    } catch {}
-                  }
-                }
-              }
-            }}
-            onLoadedData={() => {
-              // Pour Safari, essayer de lancer dès que les données sont chargées
-              if (isSafari && explanatoryVideoRef.current && explanatoryVideoRef.current.paused) {
-                playWithRetry(explanatoryVideoRef.current, { maxAttempts: 3, baseDelayMs: 200 })
-                  .catch((error) => {
-                    console.error(`❌ Erreur loadedData vidéo explicative ${explanatoryVideo}:`, error);
-                  });
-              }
-            }}
-            onError={(e) => {
-              console.error(`❌ Erreur vidéo explicative ${explanatoryVideo}:`, e);
-            }}
-            onEnded={() => {
-              // Ne pas masquer la vidéo, la laisser sur la dernière image
-              // setShowExplanatoryVideo(false);
-              // setExplanatoryVideo(null);
-            }}
+            onError={(e) => console.error('❌ Erreur vidéo explicative:', e)}
           />
-          );
-        })()}
+        )}
       
             {/* Affichage du score */}
             {showScore && (
