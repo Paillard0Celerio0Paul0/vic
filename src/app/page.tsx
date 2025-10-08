@@ -35,6 +35,7 @@ export default function Home() {
   const [mainMusicPosition, setMainMusicPosition] = useState(0);
   const [introductionUrl] = useState("https://ntpqkpm4vpvltypf.public.blob.vercel-storage.com/introduction");
   const [showArrows, setShowArrows] = useState(false);
+  const [debugMessage, setDebugMessage] = useState("");
 
   // Détection iOS/Safari et gestion du déverrouillage audio
   const isIOS = typeof navigator !== 'undefined' && (
@@ -67,6 +68,7 @@ export default function Home() {
     if (!videoRef.current) return;
     
     try {
+      setDebugMessage("🎬 Chargement " + videoId + "...");
       let videoUrl: string;
       
       // Obtenir l'URL correcte selon le type de vidéo
@@ -89,30 +91,46 @@ export default function Home() {
       
       // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
       if (isSafari || isIOS) {
+        setDebugMessage("📥 Téléchargement...");
         const response = await fetch(videoUrl);
+        setDebugMessage("🔄 Création Blob...");
         const blob = await response.blob();
         const videoBlob = new Blob([blob], { type: 'video/mp4' });
         const blobUrl = URL.createObjectURL(videoBlob);
         
+        setDebugMessage("▶️ Lecture...");
         videoRef.current.src = blobUrl;
+        
+        // Important : attendre un court délai pour que le src soit bien défini
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
         await videoRef.current.play();
+        setDebugMessage("✅ Lecture OK");
         
         // Unmute après démarrage si la vidéo a besoin de son
         if (needsSound) {
           setTimeout(() => {
             if (videoRef.current) {
               videoRef.current.muted = false;
+              videoRef.current.volume = 1.0;
+              setDebugMessage("");
             }
           }, 100);
+        } else {
+          setTimeout(() => setDebugMessage(""), 2000);
         }
       } else {
         // Pour les autres navigateurs
         videoRef.current.src = videoUrl;
         videoRef.current.load();
         await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+        setDebugMessage("");
       }
-    } catch (error) {
+    } catch (error: any) {
+      const errorMsg = error.message || error.name || "Unknown error";
+      setDebugMessage("❌ Erreur: " + errorMsg);
       console.error("Erreur chargement vidéo:", error);
+      throw error; // Propager l'erreur pour debugging
     }
   };
 
@@ -621,33 +639,40 @@ export default function Home() {
   };
 
   const handlePlay = async () => {
-    setIsPlaying(true);
-    setVideoEnded(false);
+    try {
+      setIsPlaying(true);
+      setVideoEnded(false);
 
-    if (audioRef.current && (isIOS || isSafari) && !audioUnlocked) {
-      await unlockAudioFromGesture();
-    }
+      if (audioRef.current && (isIOS || isSafari) && !audioUnlocked) {
+        await unlockAudioFromGesture();
+      }
 
-    // Charger et démarrer la vidéo
-    await loadAndPlayVideo(currentVideo);
-    
-    // Gérer l'audio
-    if (videoRef.current && audioRef.current) {
-      if (currentVideo === "introduction") {
-        // Volume géré dans loadAndPlayVideo
-        if (videoRef.current) {
-          videoRef.current.volume = videoVolume;
-        }
-        audioRef.current.pause();
-      } else {
-        videoRef.current.volume = 0;
-        try {
-          await playWithRetry(audioRef.current);
-          audioRef.current.volume = videoVolume;
-        } catch {
-          setNeedAudioEnableUI(true);
+      // Charger et démarrer la vidéo
+      await loadAndPlayVideo(currentVideo);
+      
+      // Gérer l'audio
+      if (videoRef.current && audioRef.current) {
+        if (currentVideo === "introduction") {
+          // Volume géré dans loadAndPlayVideo
+          if (videoRef.current) {
+            videoRef.current.volume = videoVolume;
+          }
+          audioRef.current.pause();
+        } else {
+          videoRef.current.volume = 0;
+          try {
+            await playWithRetry(audioRef.current);
+            audioRef.current.volume = videoVolume;
+          } catch {
+            setNeedAudioEnableUI(true);
+          }
         }
       }
+    } catch (error) {
+      console.error("❌ Erreur dans handlePlay:", error);
+      // Si échec complet, réinitialiser l'état
+      setIsPlaying(false);
+      alert("Erreur de chargement de la vidéo. Veuillez recharger la page.");
     }
   };
 
@@ -953,27 +978,45 @@ export default function Home() {
         />
         
         {/* Vidéo explicative superposée */}
-        {showExplanatoryVideo && explanatoryVideo && (
-          <video
-            ref={explanatoryVideoRef}
-            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-            playsInline
-            webkit-playsinline="true"
-            preload="none"
-            muted={false}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: isMobile ? 'contain' : 'cover',
-              zIndex: 15,
-              opacity: 1,
-              transition: 'opacity 0.5s ease-in-out',
-              backgroundColor: isMobile ? 'black' : 'transparent',
-              mixBlendMode: 'screen',
-            }}
-            onError={(e) => console.error('❌ Erreur vidéo explicative:', e)}
-          />
-        )}
+        {showExplanatoryVideo && explanatoryVideo && (() => {
+          const videoUrl = getOptimizedVideoUrlNoRange(explanatoryVideo);
+          return (
+            <video
+              ref={explanatoryVideoRef}
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              src={videoUrl}
+              playsInline
+              webkit-playsinline="true"
+              preload="metadata"
+              crossOrigin={isSafari || isIOS ? undefined : "anonymous"}
+              muted={false}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: isMobile ? 'contain' : 'cover',
+                zIndex: 15,
+                opacity: 1,
+                transition: 'opacity 0.5s ease-in-out',
+                backgroundColor: isMobile ? 'black' : 'transparent',
+                mixBlendMode: 'screen',
+              }}
+              onCanPlay={async () => {
+                // Desktop : démarrer normalement
+                // Safari/iOS : utiliser loadAndPlayExplanatoryVideo
+                if (isSafari || isIOS) {
+                  await loadAndPlayExplanatoryVideo(explanatoryVideo);
+                } else if (explanatoryVideoRef.current) {
+                  try {
+                    await explanatoryVideoRef.current.play();
+                  } catch (error) {
+                    console.error('Erreur play vidéo explicative:', error);
+                  }
+                }
+              }}
+              onError={(e) => console.error('❌ Erreur vidéo explicative:', e)}
+            />
+          );
+        })()}
       
             {/* Affichage du score */}
             {showScore && (
@@ -1104,6 +1147,13 @@ export default function Home() {
                 currentVideo={currentVideo}
                 onZoneClick={handleZoneClick}
               />
+            )}
+
+            {/* Message de debug (iPad uniquement) */}
+            {debugMessage && (isSafari || isIOS) && (
+              <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 text-white px-4 py-2 rounded-lg z-50 font-mono text-sm">
+                {debugMessage}
+              </div>
             )}
 
             {/* Bouton fallback Activer le son pendant le jeu */}
