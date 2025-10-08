@@ -139,10 +139,12 @@ export default function Home() {
     if (!audioRef.current) return;
     
     try {
+      setDebugMessage("🎵 Chargement " + audioId + "...");
       const audioUrl = getBlobUrl(audioId);
       
       // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
       if (isSafari || isIOS) {
+        setDebugMessage("📥 Fetch audio...");
         const response = await fetch(audioUrl);
         const blob = await response.blob();
         // Déterminer le type MIME correct
@@ -150,6 +152,7 @@ export default function Home() {
         const audioBlob = new Blob([blob], { type: mimeType });
         const blobUrl = URL.createObjectURL(audioBlob);
         
+        setDebugMessage("▶️ Play audio...");
         audioRef.current.src = blobUrl;
       } else {
         audioRef.current.src = audioUrl;
@@ -157,8 +160,12 @@ export default function Home() {
       
       audioRef.current.load();
       await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-    } catch (error) {
+      setDebugMessage("✅ Audio OK");
+      setTimeout(() => setDebugMessage(""), 2000);
+    } catch (error: any) {
+      setDebugMessage("❌ Audio error: " + (error.message || error.name));
       console.error("Erreur chargement audio:", error);
+      setTimeout(() => setDebugMessage(""), 5000);
     }
   };
 
@@ -167,6 +174,7 @@ export default function Home() {
     if (!explanatoryVideoRef.current) return;
     
     try {
+      setDebugMessage("📺 Text " + videoId.replace("text_", "") + "...");
       const videoUrl = getOptimizedVideoUrlNoRange(videoId);
       
       // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
@@ -183,8 +191,12 @@ export default function Home() {
       
       explanatoryVideoRef.current.load();
       await playWithRetry(explanatoryVideoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-    } catch (error) {
+      setDebugMessage("✅ Text OK");
+      setTimeout(() => setDebugMessage(""), 2000);
+    } catch (error: any) {
+      setDebugMessage("❌ Text error: " + (error.message || error.name));
       console.error("Erreur chargement vidéo explicative:", error);
+      setTimeout(() => setDebugMessage(""), 5000);
     }
   };
 
