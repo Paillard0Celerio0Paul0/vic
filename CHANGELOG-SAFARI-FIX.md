@@ -666,12 +666,59 @@ Pour l'audio :
 
 ---
 
+## 🔧 Correction autoplay Safari - Muted obligatoire (Session 13)
+
+### Problème rencontré
+Sur iOS : `playWithRetry: error` pour main_song et vidéos text_x
+
+**Cause** : Safari/iOS bloque **TOUT autoplay**, même pour les Blob URL, sauf si `muted=true`
+
+### Solution finale appliquée
+**Démarrer TOUT en muted sur Safari/iOS, puis unmute après** :
+
+#### 1. Audio (main_song, etc.) ✅
+```typescript
+// Démarrer en muted
+audioRef.current.muted = true;
+audioRef.current.volume = 0;
+await playWithRetry(...);
+
+// Unmute après 100ms
+setTimeout(() => {
+  audioRef.current.muted = false;
+  audioRef.current.volume = videoVolume;
+}, 100);
+```
+
+#### 2. Vidéos explicatives (text_x) ✅
+```typescript
+// Démarrer en muted (et rester muted car pas de son)
+explanatoryVideoRef.current.muted = true;
+await playWithRetry(...);
+```
+
+#### 3. JSX - Vidéo explicative ✅
+```typescript
+muted={true}  // Au lieu de muted={false}
+```
+
+### Résumé complet de la solution Safari/iOS
+
+**Méthode utilisée** : Blob URL + Content-Type forcé + Muted obligatoire
+
+1. **Fetch** le fichier depuis Vercel Blob
+2. **Créer Blob** avec `{ type: 'video/mp4' }` ou `{ type: 'audio/mpeg' }`
+3. **Créer URL** avec `URL.createObjectURL(blob)`
+4. **Démarrer MUTED** pour passer autoplay
+5. **Unmute après** si besoin de son
+
+---
+
 ## 🔄 Prochaines étapes
 
-1. **Tester sur iOS** : Vérifier que main_song se lance maintenant
-2. **Tester les vidéos text_x** : Devraient fonctionner également
-3. **Tester l'expérience complète** sur iPad/iPhone
-4. **Desktop** : Devrait toujours fonctionner normalement (URLs directes)
+1. **Tester sur iOS** : main_song et text_x devraient maintenant fonctionner
+2. **Tester l'expérience complète** sur iPad/iPhone
+3. **Vérifier Desktop** : Devrait toujours fonctionner normalement
 
 ---
 

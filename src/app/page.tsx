@@ -221,15 +221,27 @@ export default function Home() {
         const blobUrl = URL.createObjectURL(audioBlob);
         console.log("✅ Audio Blob URL créé:", blobUrl);
         
+        // IMPORTANT : Safari bloque autoplay audio - démarrer en muted
+        audioRef.current.muted = true;
+        audioRef.current.volume = 0;
         audioRef.current.src = blobUrl;
         setDebugMessage("⏳ Préparation audio...");
         audioRef.current.load();
         
         setDebugMessage("▶️ Lecture audio...");
         await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-        console.log("✅ Audio lancé avec succès");
-        setDebugMessage("✅ Audio OK");
-        setTimeout(() => setDebugMessage(""), 2000);
+        console.log("✅ Audio lancé (muted)");
+        
+        // Unmute progressivement
+        setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.muted = false;
+            audioRef.current.volume = videoVolume;
+            console.log("✅ Audio unmuted");
+            setDebugMessage("✅ Audio OK");
+            setTimeout(() => setDebugMessage(""), 2000);
+          }
+        }, 100);
       } else {
         console.log("🎵 URL directe pour desktop");
         audioRef.current.src = audioUrl;
@@ -276,10 +288,16 @@ export default function Home() {
         const blobUrl = URL.createObjectURL(videoBlob);
         console.log("✅ Text Blob URL créé:", blobUrl);
         
+        // IMPORTANT : Safari bloque autoplay - démarrer en muted
+        explanatoryVideoRef.current.muted = true;
         explanatoryVideoRef.current.src = blobUrl;
         explanatoryVideoRef.current.load();
+        
+        setDebugMessage("▶️ Lecture text...");
         await playWithRetry(explanatoryVideoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-        console.log("✅ Vidéo explicative lancée");
+        console.log("✅ Vidéo explicative lancée (muted)");
+        
+        // Les vidéos text doivent rester muted (elles n'ont pas de son normalement)
         setDebugMessage("✅ Text OK");
         setTimeout(() => setDebugMessage(""), 2000);
       } else {
@@ -1138,7 +1156,7 @@ export default function Home() {
               playsInline
               webkit-playsinline="true"
               preload="none"
-              muted={false}
+              muted={true}
               style={{
                 width: '100%',
                 height: '100%',
