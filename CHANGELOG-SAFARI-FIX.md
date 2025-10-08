@@ -301,13 +301,78 @@ await playWithRetry(videoRef.current, { maxAttempts: 5 });
 
 ---
 
+## 🚨 Correction urgente - Autoplay Safari/iOS (Session 6)
+
+### Problème identifié
+- ✅ **Desktop** : Fonctionne parfaitement
+- ❌ **iOS/Safari** : Bloqué sur "erreur lecture" dès l'intro
+
+### Cause racine
+**Safari/iOS bloque l'autoplay des vidéos avec son**
+
+Même si on met `muted=true` dans le JSX, le code essayait de démarrer avec du son, ce qui est **strictement interdit** par Safari sans interaction utilisateur.
+
+### Solution appliquée
+
+#### 1. Démarrage TOUJOURS en muted sur Safari/iOS
+```typescript
+// AVANT (bloqué par Safari)
+if (isSafari || isIOS) {
+  videoRef.current.muted = true; // Configuré mais...
+  // ... puis on essaie de play avec son → BLOQUÉ
+}
+
+// APRÈS (fonctionne)
+if (isSafari || isIOS) {
+  videoRef.current.muted = true; // Forcé
+  videoRef.current.src = videoUrl;
+  videoRef.current.load();
+  await playWithRetry(videoRef.current); // Play en muted → OK
+  
+  // PUIS unmute après 200ms si besoin
+  if (needsSound) {
+    setTimeout(() => {
+      videoRef.current.muted = false;
+      videoRef.current.volume = 1.0;
+    }, 200);
+  }
+}
+```
+
+#### 2. Ne pas modifier le volume dans handlePlay (Safari/iOS)
+```typescript
+if (currentVideo === "introduction") {
+  // Ne PAS toucher au volume pour Safari/iOS
+  if (!isSafari && !isIOS) {
+    videoRef.current.volume = videoVolume;
+  }
+}
+```
+
+#### 3. Logs détaillés dans playWithRetry
+```typescript
+console.log(`▶️ playWithRetry tentative ${attempt + 1}/${maxAttempts}...`);
+console.log(`   readyState: ${readyState}, networkState: ${networkState}, muted: ${muted}`);
+// Si échec :
+console.warn(`⚠️ playWithRetry tentative ${attempt + 1} échouée:`, { name, message });
+```
+
+### Ce qui devrait se passer maintenant
+
+**Sur Safari/iOS** :
+1. Clic sur "Commencer"
+2. ✅ Vidéo intro démarre **en muted** (autoplay autorisé)
+3. ✅ Après 200ms → **unmute** automatique
+4. ✅ Le son de la vidéo s'active
+
+---
+
 ## 🔄 Prochaines étapes
 
-1. **Tester sur iPad/iPhone** avec cette nouvelle approche
-2. Observer si les vidéos text_x s'affichent
-3. Observer si main_song se lance à 40s
-4. Si ça fonctionne : **simplifier le code** (supprimer la logique Blob inutile)
-5. Si ça ne fonctionne pas : investiguer le Content-Type des fichiers Vercel Blob
+1. **Tester sur iPad/iPhone** avec console Safari ouverte
+2. Observer les logs détaillés de `playWithRetry`
+3. Vérifier si l'intro se lance en muted puis s'active
+4. Si ça bloque encore : analyser le readyState/networkState dans les logs
 
 ---
 

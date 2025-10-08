@@ -93,30 +93,38 @@ export default function Home() {
       // Pour Safari/iOS, essayer d'abord l'URL directe (test)
       if (isSafari || isIOS) {
         console.log("🍎 Safari/iOS détecté - utilisation URL directe");
+        console.log(`🍎 needsSound: ${needsSound}, videoId: ${videoId}`);
         setDebugMessage("▶️ Chargement Safari...");
+        
+        // IMPORTANT : Safari/iOS bloque autoplay avec son
+        // On démarre TOUJOURS en muted, puis on unmute après
+        videoRef.current.muted = true;
         videoRef.current.src = videoUrl;
         videoRef.current.load();
         
         try {
+          console.log("▶️ Tentative play (muted)...");
           await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-          console.log("✅ Lecture réussie avec URL directe");
+          console.log("✅ Lecture réussie");
           setDebugMessage("✅ Lecture OK");
           
           // Unmute après démarrage si la vidéo a besoin de son
           if (needsSound) {
+            console.log("🔊 Unmute dans 200ms...");
             setTimeout(() => {
               if (videoRef.current) {
+                console.log("🔊 Activation du son");
                 videoRef.current.muted = false;
                 videoRef.current.volume = 1.0;
                 setDebugMessage("");
               }
-            }, 100);
+            }, 200);
           } else {
             setTimeout(() => setDebugMessage(""), 2000);
           }
         } catch (error) {
           console.error("❌ Erreur avec URL directe:", error);
-          setDebugMessage("❌ Erreur lecture");
+          setDebugMessage("❌ Erreur: " + (error instanceof Error ? error.message : String(error)));
         }
       } else {
         // Pour les autres navigateurs
@@ -233,21 +241,33 @@ export default function Home() {
     let attempt = 0;
     while (attempt < maxAttempts) {
       try {
+        console.log(`▶️ playWithRetry tentative ${attempt + 1}/${maxAttempts}...`);
+        console.log(`   readyState: ${element.readyState}, networkState: ${element.networkState}, muted: ${element.muted}`);
         await element.play();
+        console.log(`✅ playWithRetry réussi à la tentative ${attempt + 1}`);
         return;
       } catch (err: any) {
         const name = err?.name || '';
+        const message = err?.message || '';
+        console.warn(`⚠️ playWithRetry tentative ${attempt + 1} échouée:`, { name, message });
+        
         const isGate = name === 'NotAllowedError';
         if (isGate && (isIOS || isSafari)) {
+          console.error("❌ NotAllowedError sur Safari/iOS - interaction requise");
           setNeedAudioEnableUI(true);
         }
         try {
           element.load();
         } catch {}
         attempt += 1;
-        await wait(baseDelayMs * Math.pow(2, attempt - 1));
+        if (attempt < maxAttempts) {
+          const delay = baseDelayMs * Math.pow(2, attempt - 1);
+          console.log(`⏳ Attente ${delay}ms avant retry...`);
+          await wait(delay);
+        }
       }
     }
+    console.error(`❌ playWithRetry: échec après ${maxAttempts} tentatives`);
     throw new Error('playWithRetry: echec');
   };
 
@@ -682,8 +702,9 @@ export default function Home() {
       // Gérer l'audio
       if (videoRef.current && audioRef.current) {
         if (currentVideo === "introduction") {
-          // Volume géré dans loadAndPlayVideo
-          if (videoRef.current) {
+          // Volume géré dans loadAndPlayVideo pour Safari/iOS
+          // Ne pas toucher au volume ici pour Safari/iOS (géré dans le unmute)
+          if (!isSafari && !isIOS) {
             videoRef.current.volume = videoVolume;
           }
           audioRef.current.pause();
