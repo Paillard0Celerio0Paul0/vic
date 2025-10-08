@@ -256,12 +256,58 @@ await put(fileName, fileBuffer, {
 
 ---
 
+## 🔧 Changement de stratégie - Safari/iOS (Session 5)
+
+### Constat après tests
+- ✅ **Desktop** : Fonctionne parfaitement (vidéos text_x + audio)
+- ❌ **iPad/iPhone** : Rien ne fonctionne (ni vidéos text_x, ni main_song)
+
+### Hypothèse
+**Les Blob URL créées via fetch() ne fonctionnent pas correctement sur Safari/iOS**
+
+Raisons possibles :
+1. Safari iOS a des restrictions strictes sur les Blob créés dynamiquement
+2. Les Blob URL audio peuvent être bloquées pour autoplay
+3. Problèmes de permissions/sécurité avec fetch() + createObjectURL()
+
+### Solution testée : Retour aux URLs directes sur Safari/iOS
+
+**Changement appliqué** :
+```typescript
+// AVANT (ne fonctionnait pas sur Safari/iOS)
+const response = await fetch(videoUrl);
+const blob = await response.blob();
+const videoBlob = new Blob([blob], { type: 'video/mp4' });
+const blobUrl = URL.createObjectURL(videoBlob);
+videoRef.current.src = blobUrl;
+
+// APRÈS (test avec URLs directes)
+videoRef.current.src = videoUrl; // URL Vercel Blob directe
+videoRef.current.load();
+await playWithRetry(videoRef.current, { maxAttempts: 5 });
+```
+
+**Appliqué à** :
+- ✅ Vidéos principales (`loadAndPlayVideo`)
+- ✅ Audio (`loadAndPlayAudio`)  
+- ✅ Vidéos explicatives (`loadAndPlayExplanatoryVideo`)
+
+### Pourquoi ça devrait fonctionner
+
+1. **Vercel Blob** retourne peut-être maintenant le bon Content-Type
+2. **Safari moderne** peut lire les vidéos même avec un Content-Type incorrect
+3. **Moins de couches** = moins de points de défaillance
+4. **Desktop continue à fonctionner** (même logique)
+
+---
+
 ## 🔄 Prochaines étapes
 
-1. Tester sur Desktop ET iPad
-2. Ouvrir la console et observer les logs
-3. Cliquer sur un objet et **identifier exactement** où le flux se rompt
-4. Une fois le problème identifié, appliquer la correction ciblée
+1. **Tester sur iPad/iPhone** avec cette nouvelle approche
+2. Observer si les vidéos text_x s'affichent
+3. Observer si main_song se lance à 40s
+4. Si ça fonctionne : **simplifier le code** (supprimer la logique Blob inutile)
+5. Si ça ne fonctionne pas : investiguer le Content-Type des fichiers Vercel Blob
 
 ---
 

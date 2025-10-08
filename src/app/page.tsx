@@ -90,35 +90,33 @@ export default function Home() {
         videoRef.current.muted = !needsSound;
       }
       
-      // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
+      // Pour Safari/iOS, essayer d'abord l'URL directe (test)
       if (isSafari || isIOS) {
-        setDebugMessage("📥 Téléchargement...");
-        const response = await fetch(videoUrl);
-        setDebugMessage("🔄 Création Blob...");
-        const blob = await response.blob();
-        const videoBlob = new Blob([blob], { type: 'video/mp4' });
-        const blobUrl = URL.createObjectURL(videoBlob);
+        console.log("🍎 Safari/iOS détecté - utilisation URL directe");
+        setDebugMessage("▶️ Chargement Safari...");
+        videoRef.current.src = videoUrl;
+        videoRef.current.load();
         
-        setDebugMessage("▶️ Lecture...");
-        videoRef.current.src = blobUrl;
-        
-        // Important : attendre un court délai pour que le src soit bien défini
-        await new Promise(resolve => setTimeout(resolve, 50));
-        
-        await videoRef.current.play();
-        setDebugMessage("✅ Lecture OK");
-        
-        // Unmute après démarrage si la vidéo a besoin de son
-        if (needsSound) {
-          setTimeout(() => {
-            if (videoRef.current) {
-              videoRef.current.muted = false;
-              videoRef.current.volume = 1.0;
-              setDebugMessage("");
-            }
-          }, 100);
-        } else {
-          setTimeout(() => setDebugMessage(""), 2000);
+        try {
+          await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+          console.log("✅ Lecture réussie avec URL directe");
+          setDebugMessage("✅ Lecture OK");
+          
+          // Unmute après démarrage si la vidéo a besoin de son
+          if (needsSound) {
+            setTimeout(() => {
+              if (videoRef.current) {
+                videoRef.current.muted = false;
+                videoRef.current.volume = 1.0;
+                setDebugMessage("");
+              }
+            }, 100);
+          } else {
+            setTimeout(() => setDebugMessage(""), 2000);
+          }
+        } catch (error) {
+          console.error("❌ Erreur avec URL directe:", error);
+          setDebugMessage("❌ Erreur lecture");
         }
       } else {
         // Pour les autres navigateurs
@@ -149,22 +147,11 @@ export default function Home() {
       const audioUrl = getBlobUrl(audioId);
       console.log("🎵 URL audio:", audioUrl);
       
-      // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
+      // Pour Safari/iOS, essayer URL directe (test)
       if (isSafari || isIOS) {
-        console.log("📥 Fetch blob audio pour Safari/iOS...");
-        setDebugMessage("📥 Fetch audio...");
-        const response = await fetch(audioUrl);
-        console.log("📥 Réponse fetch:", response.status);
-        const blob = await response.blob();
-        console.log("📥 Blob reçu, taille:", blob.size);
-        // Déterminer le type MIME correct
-        const mimeType = audioId.includes('song') ? 'audio/mpeg' : 'audio/mp4';
-        const audioBlob = new Blob([blob], { type: mimeType });
-        const blobUrl = URL.createObjectURL(audioBlob);
-        console.log("✅ Blob URL audio créé:", blobUrl);
-        
-        setDebugMessage("▶️ Play audio...");
-        audioRef.current.src = blobUrl;
+        console.log("🍎 Safari/iOS audio - utilisation URL directe");
+        setDebugMessage("🎵 Chargement audio...");
+        audioRef.current.src = audioUrl;
       } else {
         console.log("🎵 URL directe pour desktop");
         audioRef.current.src = audioUrl;
@@ -199,16 +186,10 @@ export default function Home() {
       const videoUrl = getOptimizedVideoUrlNoRange(videoId);
       console.log("📺 URL:", videoUrl);
       
-      // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
+      // Pour Safari/iOS, essayer URL directe (test)
       if (isSafari || isIOS) {
-        console.log("📥 Fetch blob pour Safari/iOS...");
-        const response = await fetch(videoUrl);
-        const blob = await response.blob();
-        const videoBlob = new Blob([blob], { type: 'video/mp4' });
-        const blobUrl = URL.createObjectURL(videoBlob);
-        
-        explanatoryVideoRef.current.src = blobUrl;
-        console.log("✅ Blob URL créé:", blobUrl);
+        console.log("🍎 Safari/iOS vidéo explicative - utilisation URL directe");
+        explanatoryVideoRef.current.src = videoUrl;
       } else {
         console.log("📺 URL directe pour desktop");
         explanatoryVideoRef.current.src = videoUrl;
