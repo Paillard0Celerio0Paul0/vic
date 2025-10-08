@@ -90,90 +90,72 @@ export default function Home() {
         videoRef.current.muted = !needsSound;
       }
       
-      // Pour Safari/iOS, essayer d'abord l'URL directe (test)
+      // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
       if (isSafari || isIOS) {
-        console.log("🍎 Safari/iOS détecté - utilisation URL directe");
+        console.log("🍎 Safari/iOS détecté - utilisation Blob URL");
         console.log(`🍎 needsSound: ${needsSound}, videoId: ${videoId}`);
-        setDebugMessage("▶️ Chargement Safari...");
+        setDebugMessage("📥 Téléchargement...");
         
         // IMPORTANT : Safari/iOS bloque autoplay avec son
-        // On démarre TOUJOURS en muted, puis on unmute après
         videoRef.current.muted = true;
-        videoRef.current.src = videoUrl;
-        
-        // Attendre que la vidéo soit prête avant de play()
-        setDebugMessage("⏳ Attente métadonnées...");
-        console.log("⏳ Attente chargement métadonnées...");
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            const state = `RS:${videoRef.current?.readyState} NS:${videoRef.current?.networkState}`;
-            setDebugMessage(`❌ Timeout ${state}`);
-            console.error("❌ Timeout - readyState:", videoRef.current?.readyState, "networkState:", videoRef.current?.networkState);
-            reject(new Error("Timeout chargement vidéo"));
-          }, 15000); // 15 secondes max
-          
-          const onLoadedMetadata = () => {
-            clearTimeout(timeout);
-            setDebugMessage("✅ Métadonnées OK");
-            console.log("✅ Métadonnées chargées (loadedmetadata), readyState:", videoRef.current?.readyState);
-            cleanup();
-            resolve();
-          };
-          
-          const onCanPlay = () => {
-            clearTimeout(timeout);
-            setDebugMessage("✅ Vidéo prête");
-            console.log("✅ Vidéo prête (canplay), readyState:", videoRef.current?.readyState);
-            cleanup();
-            resolve();
-          };
-          
-          const onError = (e: Event) => {
-            clearTimeout(timeout);
-            const target = e.target as HTMLVideoElement;
-            const errorCode = target.error?.code || 0;
-            const errorMsg = target.error?.message || 'Unknown';
-            const errorNames = ['', 'ABORTED', 'NETWORK', 'DECODE', 'SRC_NOT_SUPPORTED'];
-            const errorName = errorNames[errorCode] || `CODE_${errorCode}`;
-            
-            setDebugMessage(`❌ ${errorName}: ${errorMsg.substring(0, 30)}`);
-            console.error("❌ Erreur chargement vidéo:", {
-              error: target.error,
-              code: errorCode,
-              message: errorMsg,
-              readyState: target.readyState,
-              networkState: target.networkState
-            });
-            cleanup();
-            reject(new Error(`Erreur ${errorName}: ${errorMsg}`));
-          };
-          
-          const cleanup = () => {
-            videoRef.current?.removeEventListener('loadedmetadata', onLoadedMetadata);
-            videoRef.current?.removeEventListener('canplay', onCanPlay);
-            videoRef.current?.removeEventListener('error', onError);
-          };
-          
-          // Écouter loadedmetadata (se déclenche plus tôt que canplay sur Safari)
-          videoRef.current?.addEventListener('loadedmetadata', onLoadedMetadata);
-          videoRef.current?.addEventListener('canplay', onCanPlay);
-          videoRef.current?.addEventListener('error', onError);
-          videoRef.current?.load();
-        });
         
         try {
-          setDebugMessage("▶️ Lecture...");
-          console.log("▶️ Tentative play (muted)...");
-          await videoRef.current.play();
-          console.log("✅ Lecture réussie");
+          // Fetch le fichier et créer un Blob avec le BON Content-Type
+          const response = await fetch(videoUrl);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
           
-          // Unmute après démarrage si la vidéo a besoin de son
+          setDebugMessage("🔄 Création Blob...");
+          const blob = await response.blob();
+          console.log("📦 Blob reçu:", blob.size, "bytes, type:", blob.type);
+          
+          // Forcer le bon Content-Type
+          const videoBlob = new Blob([blob], { type: 'video/mp4' });
+          const blobUrl = URL.createObjectURL(videoBlob);
+          console.log("✅ Blob URL créé:", blobUrl);
+          
+          videoRef.current.src = blobUrl;
+          setDebugMessage("⏳ Chargement...");
+          
+          // Attendre loadedmetadata
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              setDebugMessage("❌ Timeout Blob");
+              reject(new Error("Timeout"));
+            }, 10000);
+            
+            const onLoadedMetadata = () => {
+              clearTimeout(timeout);
+              setDebugMessage("✅ Prêt");
+              videoRef.current?.removeEventListener('loadedmetadata', onLoadedMetadata);
+              videoRef.current?.removeEventListener('error', onError);
+              resolve();
+            };
+            
+            const onError = (e: Event) => {
+              clearTimeout(timeout);
+              const target = e.target as HTMLVideoElement;
+              const code = target.error?.code || 0;
+              setDebugMessage(`❌ Erreur code:${code}`);
+              videoRef.current?.removeEventListener('loadedmetadata', onLoadedMetadata);
+              videoRef.current?.removeEventListener('error', onError);
+              reject(new Error(`Error ${code}`));
+            };
+            
+            videoRef.current?.addEventListener('loadedmetadata', onLoadedMetadata);
+            videoRef.current?.addEventListener('error', onError);
+            videoRef.current?.load();
+          });
+          
+          // Play
+          setDebugMessage("▶️ Lecture...");
+          await videoRef.current.play();
+          
+          // Unmute si besoin
           if (needsSound) {
-            setDebugMessage("🔊 Activation son...");
-            console.log("🔊 Unmute dans 200ms...");
             setTimeout(() => {
               if (videoRef.current) {
-                console.log("🔊 Activation du son");
                 videoRef.current.muted = false;
                 videoRef.current.volume = 1.0;
                 setDebugMessage("✅ OK");
@@ -186,8 +168,8 @@ export default function Home() {
           }
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
-          setDebugMessage(`❌ Play: ${errMsg.substring(0, 30)}`);
-          console.error("❌ Erreur play:", error);
+          setDebugMessage(`❌ ${errMsg.substring(0, 40)}`);
+          console.error("❌ Erreur Safari:", error);
           throw error;
         }
       } else {
