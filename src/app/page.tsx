@@ -640,13 +640,16 @@ export default function Home() {
 
   const handlePlay = async () => {
     try {
+      setDebugMessage("🚀 Démarrage...");
       setIsPlaying(true);
       setVideoEnded(false);
 
       if (audioRef.current && (isIOS || isSafari) && !audioUnlocked) {
+        setDebugMessage("🔓 Unlock audio...");
         await unlockAudioFromGesture();
       }
 
+      setDebugMessage("📹 Lancement vidéo...");
       // Charger et démarrer la vidéo
       await loadAndPlayVideo(currentVideo);
       
