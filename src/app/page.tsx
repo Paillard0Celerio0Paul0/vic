@@ -26,7 +26,7 @@ export default function Home() {
   const [explanatoryVideo, setExplanatoryVideo] = useState<string | null>(null);
   const [showExplanatoryVideo, setShowExplanatoryVideo] = useState(false);
   const explanatoryVideoRef = useRef<HTMLVideoElement>(null);
-  const [score, setScore] = useState(9);
+  const [score, setScore] = useState(0);
   const [validatedObjects, setValidatedObjects] = useState<Set<string>>(new Set());
   const [showScore, setShowScore] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
@@ -35,8 +35,6 @@ export default function Home() {
   const [mainMusicPosition, setMainMusicPosition] = useState(0);
   const [introductionUrl] = useState("https://ntpqkpm4vpvltypf.public.blob.vercel-storage.com/introduction");
   const [showArrows, setShowArrows] = useState(false);
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [showDebug, setShowDebug] = useState(true); // Mettre à false pour masquer les logs
 
   // Détection iOS/Safari et gestion du déverrouillage audio
   const isIOS = typeof navigator !== 'undefined' && (
@@ -52,35 +50,17 @@ export default function Home() {
     (navigator.userAgent.includes('AppleWebKit') && navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome'))
   );
   
-  // Log de détection au montage
+  // Log de détection au montage (optionnel en dev)
   useEffect(() => {
-    const detectionInfo = {
-      isIOS,
-      isSafari,
-      userAgent: navigator.userAgent,
-      platform: navigator.platform,
-      maxTouchPoints: navigator.maxTouchPoints,
-      hasTouch: 'ontouchend' in document,
-      isMacintosh: navigator.userAgent.includes('Macintosh'),
-      hasAppleWebKit: navigator.userAgent.includes('AppleWebKit'),
-      hasSafariInUA: navigator.userAgent.includes('Safari'),
-      hasChrome: navigator.userAgent.includes('Chrome')
-    };
-    console.log('🔍 Détections navigateur:', detectionInfo);
-    debugLog('🔍 isIOS=' + isIOS + ' isSafari=' + isSafari + ' maxTouch=' + navigator.maxTouchPoints);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Détections navigateur:', { isIOS, isSafari, platform: navigator.platform });
+    }
   }, []);
   
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [needAudioEnableUI, setNeedAudioEnableUI] = useState(false);
 
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  // Fonction pour logger sur la page ET dans la console
-  const debugLog = (message: string, data?: any) => {
-    const logMessage = data ? `${message} ${JSON.stringify(data)}` : message;
-    console.log(message, data);
-    setDebugLogs(prev => [...prev.slice(-20), logMessage]); // Garde les 20 derniers logs
-  };
 
   const unlockAudioFromGesture = async () => {
     if (!audioRef.current) return;
@@ -675,119 +655,44 @@ export default function Home() {
   };
 
   const handlePlay = async () => {
-    debugLog('🎬 handlePlay démarré');
     setIsPlaying(true);
     setVideoEnded(false);
 
     if (audioRef.current && (isIOS || isSafari) && !audioUnlocked) {
-      debugLog('🔓 Tentative unlock audio...');
       await unlockAudioFromGesture();
     }
 
     // Démarrer la vidéo et l'audio
     if (videoRef.current && audioRef.current) {
       const videoUrl = getOptimizedVideoUrl(currentVideo);
-      debugLog('📹 URL: ' + videoUrl.substring(0, 60) + '...');
       
-      // Pour Safari/iOS : IMPÉRATIF de tout faire dans le même contexte utilisateur
+      // Pour Safari/iOS : utiliser Blob URL avec bon Content-Type
       if (isSafari || isIOS) {
-        debugLog('🍎 Mode Safari/iOS - nouvelle approche');
-        
-        // Technique alternative : créer et jouer IMMÉDIATEMENT
-        const tempVideo = document.createElement('video');
-        tempVideo.muted = true;
-        tempVideo.playsInline = true;
-        tempVideo.src = videoUrl;
-        
-        debugLog('🎥 Vidéo temporaire créée');
-        
         try {
-          // Essayer de jouer SANS load() - Safari préfère parfois ça
-          await tempVideo.play();
-          debugLog('✅ Temp video play réussi !');
+          // Fetch et créer Blob URL avec type video/mp4
+          const response = await fetch(videoUrl);
+          const blob = await response.blob();
+          const videoBlob = new Blob([blob], { type: 'video/mp4' });
+          const blobUrl = URL.createObjectURL(videoBlob);
           
-          // Si ça marche, transférer au vrai élément
-          tempVideo.pause();
           videoRef.current.muted = true;
-          videoRef.current.src = videoUrl;
-          
-          // Attendre un peu pour la propagation
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
+          videoRef.current.src = blobUrl;
           await videoRef.current.play();
-          debugLog('✅ Transfert vers videoRef réussi !');
           
-          // Unmute
-          setTimeout(() => {
-            if (videoRef.current && currentVideo === "introduction") {
-              debugLog('🔊 Unmute vidéo');
-              videoRef.current.muted = false;
-              videoRef.current.volume = videoVolume;
-            }
-          }, 200);
-          
-        } catch (tempError: any) {
-          debugLog('❌ Temp video failed: ' + tempError.message);
-          
-          // Plan C : Utiliser data URL ou blob URL
-          try {
-            debugLog('🔄 Plan C - Fetch et Blob...');
-            const response = await fetch(videoUrl);
-            
-            // Log taille et type
-            const contentLength = response.headers.get('content-length');
-            const contentType = response.headers.get('content-type');
-            debugLog('📦 Taille: ' + (contentLength ? (parseInt(contentLength) / 1024 / 1024).toFixed(2) + 'MB' : 'unknown'));
-            debugLog('📄 Type: ' + contentType);
-            
-            const blob = await response.blob();
-            
-            // IMPORTANT: Créer un nouveau Blob avec le bon Content-Type pour Safari
-            const videoBlob = new Blob([blob], { type: 'video/mp4' });
-            const blobUrl = URL.createObjectURL(videoBlob);
-            debugLog('✅ Blob URL créé avec type video/mp4');
-            
-            videoRef.current.muted = true;
-            videoRef.current.src = blobUrl;
-            await videoRef.current.play();
-            debugLog('✅ Play avec Blob URL réussi !');
-            
+          // Unmute pour la vidéo d'introduction
+          if (currentVideo === "introduction") {
             setTimeout(() => {
-              if (videoRef.current && currentVideo === "introduction") {
+              if (videoRef.current) {
                 videoRef.current.muted = false;
                 videoRef.current.volume = videoVolume;
               }
             }, 200);
-            
-          } catch (blobError: any) {
-            debugLog('❌ Blob failed: ' + blobError.message);
-            debugLog('📊 Final state - ready: ' + videoRef.current.readyState + ' network: ' + videoRef.current.networkState);
-            
-            // Plan D : Test avec vidéo simple pour diagnostiquer
-            try {
-              debugLog('🧪 Test vidéo simple...');
-              // Vidéo test MP4 basique hébergée publiquement
-              const testUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-              videoRef.current.src = testUrl;
-              await videoRef.current.play();
-              debugLog('✅ Test vidéo OK ! Problème = format/codec de votre vidéo');
-            } catch (testError: any) {
-              debugLog('❌ Test vidéo failed: ' + testError.message);
-              
-              // Diagnostics finaux
-              const video = videoRef.current;
-              debugLog('🔍 Diagnostics:');
-              debugLog('- canPlayType(mp4): ' + video.canPlayType('video/mp4'));
-              debugLog('- canPlayType(mp4;h264): ' + video.canPlayType('video/mp4; codecs="avc1.42E01E"'));
-              debugLog('- canPlayType(webm): ' + video.canPlayType('video/webm'));
-              debugLog('- autoplay: ' + video.autoplay);
-              debugLog('- controls: ' + video.controls);
-              debugLog('- URL longueur: ' + videoUrl.length);
-            }
           }
+        } catch (error) {
+          console.error("Erreur lecture Safari:", error);
         }
       } else {
-        // Mode non-Safari (ancien code)
+        // Mode non-Safari
         if (videoRef.current.src !== videoUrl) {
           videoRef.current.src = videoUrl;
           videoRef.current.load();
@@ -795,13 +700,14 @@ export default function Home() {
         
         try {
           await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-          debugLog('✅ Vidéo lancée avec succès');
-        } catch (error: any) {
-          debugLog('❌ Erreur: ' + error.message);
+        } catch (error) {
+          console.error("Erreur lecture vidéo:", error);
         }
       }
       
       if (currentVideo === "introduction") {
+        videoRef.current.volume = videoVolume;
+        videoRef.current.muted = false;
         audioRef.current.pause();
       } else {
         videoRef.current.volume = 0;
@@ -824,11 +730,6 @@ export default function Home() {
                            ('ontouchstart' in window) ||
                            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || // iPad moderne
                            (navigator.userAgent.includes('Macintosh') && 'ontouchend' in document); // iPad via touch
-      console.log('📱 isMobileDevice détecté:', isMobileDevice, {
-        hasTouch: 'ontouchstart' in window,
-        isMacTouch: navigator.userAgent.includes('Macintosh') && 'ontouchend' in document,
-        windowWidth: window.innerWidth
-      });
       setIsMobile(isMobileDevice);
     };
     
@@ -1187,12 +1088,7 @@ export default function Home() {
           muted={true}
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
-          onError={(e) => {
-            console.error('❌ Erreur vidéo principale:', e);
-            if (videoRef.current && videoRef.current.error) {
-              debugLog('🚨 Video error: code=' + videoRef.current.error.code + ' msg=' + videoRef.current.error.message);
-            }
-          }}
+          onError={(e) => console.error('❌ Erreur vidéo:', e)}
           style={{
             width: '100%',
             height: '100%',
@@ -1461,33 +1357,6 @@ export default function Home() {
           </>
         )}
       </div>
-
-      {/* Console de debug visible sur la page */}
-      {showDebug && (
-        <div 
-          className="fixed bottom-0 left-0 right-0 bg-black bg-opacity-90 text-white text-xs p-2 max-h-48 overflow-y-auto z-50 font-mono"
-          style={{ fontSize: '10px' }}
-        >
-          <div className="flex justify-between items-center mb-1 border-b border-gray-600 pb-1">
-            <span className="font-bold">🐛 Console Debug</span>
-            <button 
-              onClick={() => setShowDebug(false)}
-              className="text-red-500 hover:text-red-300 px-2"
-            >
-              ✕
-            </button>
-          </div>
-          {debugLogs.length === 0 ? (
-            <div className="text-gray-400">Aucun log pour le moment...</div>
-          ) : (
-            debugLogs.map((log, index) => (
-              <div key={index} className="py-0.5 border-b border-gray-800">
-                {log}
-              </div>
-            ))
-          )}
-        </div>
-      )}
     </div>
   );
 } 
