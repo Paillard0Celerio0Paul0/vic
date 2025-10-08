@@ -1217,25 +1217,7 @@ export default function Home() {
                   Commencer
                 </button>
               )}
-              {needAudioEnableUI && (
-                <div className="mt-4">
-                  <button
-                    onClick={async () => {
-                      await unlockAudioFromGesture();
-                      if (audioRef.current) {
-                        try {
-                          await playWithRetry(audioRef.current);
-                          audioRef.current.volume = videoVolume;
-                          setNeedAudioEnableUI(false);
-                        } catch {}
-                      }
-                    }}
-                    className="dogica-white text-base bg-transparent border-2 border-white px-4 py-2 rounded-lg hover:bg-white hover:text-black transition-all"
-                  >
-                    Activer le son
-                  </button>
-                </div>
-              )}
+           
             </div>
           </div>
         ) : (
