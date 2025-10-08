@@ -442,12 +442,80 @@ await videoRef.current.play(); // ✅ Devrait fonctionner
 
 ---
 
+## 🚨 PROBLÈME IDENTIFIÉ - Content-Type Vercel Blob (Session 8)
+
+### Symptôme
+- ❌ iOS/Safari : Modal "Erreur de chargement de la vidéo"
+- ❌ Reste bloqué sur "Chargement safari..."
+- ❌ L'événement `canplay` ne se déclenche JAMAIS
+
+### Cause racine probable
+**Les fichiers Vercel Blob ont été uploadés SANS le bon Content-Type**
+
+Safari refuse strictement de charger les vidéos si :
+- Content-Type = `application/octet-stream` (probablement le cas)
+- Au lieu de `video/mp4` ou `audio/mpeg`
+
+### Diagnostic
+
+**1. Vérifier le Content-Type actuel** :
+```bash
+curl -I https://ntpqkpm4vpvltypf.public.blob.vercel-storage.com/introduction
+```
+
+Cherchez la ligne `Content-Type:` :
+- ✅ `Content-Type: video/mp4` → Problème ailleurs
+- ❌ `Content-Type: application/octet-stream` → **Il faut re-uploader**
+
+### Solution : Re-upload avec le bon Content-Type
+
+Le script `upload-optimized-videos.js` a été mis à jour :
+
+**Nouveautés** :
+```javascript
+// Détection automatique du Content-Type
+let contentType = 'video/mp4';
+if (fileName.includes('song')) {
+  contentType = 'audio/mpeg';
+}
+
+await put(fileName, fileBuffer, {
+  access: 'public',
+  token: process.env.BLOB_READ_WRITE_TOKEN,
+  contentType: contentType,        // ✅ Bon Content-Type
+  addRandomSuffix: false,          // ✅ Garde les mêmes URLs
+});
+```
+
+**Commande pour re-uploader** :
+```bash
+npm run upload-videos
+```
+
+### 🔧 Correction supplémentaire - Extensions de fichiers
+
+**Problème découvert** : Même avec `contentType` spécifié, Vercel Blob affichait "unknown" car les fichiers n'avaient **pas d'extension**.
+
+**Solution** :
+```javascript
+// Ajouter l'extension au nom du fichier uploadé
+const uploadName = `${fileName}.mp4`;  // ou .mp3 pour les audio
+await put(uploadName, fileBuffer, {
+  contentType: 'video/mp4',
+  addRandomSuffix: false
+});
+```
+
+⚠️ **Important** : Les URLs vont changer (ajout de `.mp4` ou `.mp3`). Le fichier `blob-urls.json` sera automatiquement mis à jour.
+
+---
+
 ## 🔄 Prochaines étapes
 
-1. **Tester sur iPad/iPhone** avec console Safari
-2. Observer si `canplay` se déclenche ou si on a une erreur
-3. Si `canplay` se déclenche → le play devrait fonctionner
-4. Si erreur de chargement → problème avec l'URL ou le Content-Type Vercel Blob
+1. **Vérifier le Content-Type** avec la commande curl
+2. **Si Content-Type incorrect** : Re-uploader les fichiers
+3. **Retester sur iPad/iPhone** après upload
+4. Si ça ne fonctionne toujours pas → investiguer autre chose (mais très probablement c'est le Content-Type)
 
 ---
 
