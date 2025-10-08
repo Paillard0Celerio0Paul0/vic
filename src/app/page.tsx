@@ -993,17 +993,13 @@ export default function Home() {
         />
         
         {/* Vidéo explicative superposée */}
-        {showExplanatoryVideo && explanatoryVideo && (() => {
-          const videoUrl = getOptimizedVideoUrlNoRange(explanatoryVideo);
-          return (
+        {showExplanatoryVideo && explanatoryVideo && (
             <video
               ref={explanatoryVideoRef}
               className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-              src={videoUrl}
               playsInline
               webkit-playsinline="true"
-              preload="metadata"
-              crossOrigin={isSafari || isIOS ? undefined : "anonymous"}
+              preload="none"
               muted={false}
               style={{
                 width: '100%',
@@ -1015,23 +1011,9 @@ export default function Home() {
                 backgroundColor: isMobile ? 'black' : 'transparent',
                 mixBlendMode: 'screen',
               }}
-              onCanPlay={async () => {
-                // Desktop : démarrer normalement
-                // Safari/iOS : utiliser loadAndPlayExplanatoryVideo
-                if (isSafari || isIOS) {
-                  await loadAndPlayExplanatoryVideo(explanatoryVideo);
-                } else if (explanatoryVideoRef.current) {
-                  try {
-                    await explanatoryVideoRef.current.play();
-                  } catch (error) {
-                    console.error('Erreur play vidéo explicative:', error);
-                  }
-                }
-              }}
               onError={(e) => console.error('❌ Erreur vidéo explicative:', e)}
             />
-          );
-        })()}
+          )}
       
             {/* Affichage du score */}
             {showScore && (
