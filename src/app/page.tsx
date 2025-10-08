@@ -691,65 +691,67 @@ export default function Home() {
       
       // Pour Safari/iOS : IMPÉRATIF de tout faire dans le même contexte utilisateur
       if (isSafari || isIOS) {
-        debugLog('🍎 Mode Safari/iOS - chargement direct dans clic');
+        debugLog('🍎 Mode Safari/iOS - nouvelle approche');
         
-        // 1. Configurer la vidéo AVANT load
-        videoRef.current.muted = true;
-        videoRef.current.volume = 0;
-        videoRef.current.src = videoUrl;
+        // Technique alternative : créer et jouer IMMÉDIATEMENT
+        const tempVideo = document.createElement('video');
+        tempVideo.muted = true;
+        tempVideo.playsInline = true;
+        tempVideo.src = videoUrl;
         
-        // 2. Forcer le load DANS le contexte du clic
-        videoRef.current.load();
+        debugLog('🎥 Vidéo temporaire créée');
         
-        debugLog('📊 Après load - readyState: ' + videoRef.current.readyState + ' networkState: ' + videoRef.current.networkState);
-        
-        // 3. Essayer de jouer immédiatement (Safari veut ça dans le même tick)
         try {
-          await videoRef.current.play();
-          debugLog('✅ Play direct réussi !');
+          // Essayer de jouer SANS load() - Safari préfère parfois ça
+          await tempVideo.play();
+          debugLog('✅ Temp video play réussi !');
           
-          // Unmute après démarrage
+          // Si ça marche, transférer au vrai élément
+          tempVideo.pause();
+          videoRef.current.muted = true;
+          videoRef.current.src = videoUrl;
+          
+          // Attendre un peu pour la propagation
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          await videoRef.current.play();
+          debugLog('✅ Transfert vers videoRef réussi !');
+          
+          // Unmute
           setTimeout(() => {
             if (videoRef.current && currentVideo === "introduction") {
               debugLog('🔊 Unmute vidéo');
               videoRef.current.muted = false;
               videoRef.current.volume = videoVolume;
             }
-          }, 100);
-        } catch (playError: any) {
-          debugLog('❌ Play direct échoué: ' + playError.message);
-          debugLog('📊 readyState: ' + videoRef.current.readyState + ' networkState: ' + videoRef.current.networkState);
+          }, 200);
           
-          // Dernier recours : attendre loadedmetadata
+        } catch (tempError: any) {
+          debugLog('❌ Temp video failed: ' + tempError.message);
+          
+          // Plan C : Utiliser data URL ou blob URL
           try {
-            debugLog('⏳ Attente loadedmetadata...');
-            await new Promise((resolve, reject) => {
-              if (!videoRef.current) return reject();
-              
-              const timeout = setTimeout(() => {
-                debugLog('⏰ Timeout loadedmetadata');
-                reject(new Error('Timeout'));
-              }, 5000);
-              
-              videoRef.current.addEventListener('loadedmetadata', () => {
-                clearTimeout(timeout);
-                debugLog('✅ loadedmetadata reçu - readyState: ' + videoRef.current?.readyState);
-                resolve(null);
-              }, { once: true });
-            });
+            debugLog('🔄 Plan C - Fetch et Blob...');
+            const response = await fetch(videoUrl);
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            debugLog('✅ Blob URL créé: ' + blobUrl.substring(0, 40) + '...');
             
-            // Réessayer play après metadata
+            videoRef.current.muted = true;
+            videoRef.current.src = blobUrl;
             await videoRef.current.play();
-            debugLog('✅ Play après metadata réussi !');
+            debugLog('✅ Play avec Blob URL réussi !');
             
             setTimeout(() => {
               if (videoRef.current && currentVideo === "introduction") {
                 videoRef.current.muted = false;
                 videoRef.current.volume = videoVolume;
               }
-            }, 100);
-          } catch (finalError: any) {
-            debugLog('❌ Échec final: ' + finalError.message);
+            }, 200);
+            
+          } catch (blobError: any) {
+            debugLog('❌ Blob failed: ' + blobError.message);
+            debugLog('📊 Final state - ready: ' + videoRef.current.readyState + ' network: ' + videoRef.current.networkState);
           }
         }
       } else {
