@@ -687,111 +687,83 @@ export default function Home() {
     // Démarrer la vidéo et l'audio
     if (videoRef.current && audioRef.current) {
       const videoUrl = getOptimizedVideoUrl(currentVideo);
-      debugLog('📹 URL complete: ' + videoUrl);
+      debugLog('📹 URL: ' + videoUrl.substring(0, 60) + '...');
       
-      // Test CORS et format pour Safari
+      // Pour Safari/iOS : IMPÉRATIF de tout faire dans le même contexte utilisateur
       if (isSafari || isIOS) {
-        try {
-          const response = await fetch(videoUrl, { method: 'HEAD' });
-          const cors = response.headers.get('access-control-allow-origin') || 'none';
-          debugLog('🌐 Status: ' + response.status + ' CORS: ' + cors);
-        } catch (corsError: any) {
-          debugLog('🚫 CORS error: ' + corsError.message);
-        }
+        debugLog('🍎 Mode Safari/iOS - chargement direct dans clic');
         
-        // Test support format vidéo
-        const canPlay = videoRef.current.canPlayType('video/mp4; codecs="avc1.42E01E"');
-        debugLog('🎬 canPlayType mp4: ' + (canPlay || 'no'));
-      }
-      
-      if (videoRef.current.src !== videoUrl) {
-        videoRef.current.src = videoUrl;
-        
-        // Ajouter un listener pour les erreurs de chargement
-        videoRef.current.onerror = (e) => {
-          const video = videoRef.current;
-          if (video && video.error) {
-            const errorCode = video.error.code;
-            const errorMessages = {
-              1: 'MEDIA_ERR_ABORTED',
-              2: 'MEDIA_ERR_NETWORK', 
-              3: 'MEDIA_ERR_DECODE',
-              4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
-            };
-            debugLog('🚨 Video error code: ' + errorCode + ' = ' + errorMessages[errorCode as keyof typeof errorMessages]);
-          }
-        };
-        
-        videoRef.current.load();
-      }
-      
-      // Pour Safari/iPad, démarrer TOUJOURS muted puis unmute après
-      if (isSafari || isIOS) {
-        debugLog('🍎 Mode Safari/iOS - démarrage muted');
+        // 1. Configurer la vidéo AVANT load
         videoRef.current.muted = true;
         videoRef.current.volume = 0;
+        videoRef.current.src = videoUrl;
         
-        // Attendre que la vidéo soit prête
-        await new Promise((resolve) => {
-          if (videoRef.current) {
-            videoRef.current.addEventListener('loadeddata', resolve, { once: true });
-            // Fallback timeout
-            setTimeout(resolve, 3000);
-          } else {
-            resolve(null);
-          }
-        });
-      }
-      
-      try {
-        debugLog('▶️ Tentative lecture vidéo...');
-        // Log l'état de la vidéo avant lecture
-        debugLog('📊 readyState: ' + videoRef.current.readyState + ' networkState: ' + videoRef.current.networkState);
-        await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-        debugLog('✅ Vidéo lancée avec succès');
+        // 2. Forcer le load DANS le contexte du clic
+        videoRef.current.load();
         
-        // Unmute après démarrage réussi pour Safari
-        if ((isSafari || isIOS) && currentVideo === "introduction") {
+        debugLog('📊 Après load - readyState: ' + videoRef.current.readyState + ' networkState: ' + videoRef.current.networkState);
+        
+        // 3. Essayer de jouer immédiatement (Safari veut ça dans le même tick)
+        try {
+          await videoRef.current.play();
+          debugLog('✅ Play direct réussi !');
+          
+          // Unmute après démarrage
           setTimeout(() => {
-            if (videoRef.current) {
-              debugLog('🔊 Unmute vidéo introduction');
+            if (videoRef.current && currentVideo === "introduction") {
+              debugLog('🔊 Unmute vidéo');
               videoRef.current.muted = false;
               videoRef.current.volume = videoVolume;
             }
           }, 100);
-        }
-      } catch (error: any) {
-        const errorMsg = error.message || error.name || 'Unknown';
-        debugLog('❌ Erreur: ' + errorMsg);
-        debugLog('📊 readyState: ' + videoRef.current.readyState + ' networkState: ' + videoRef.current.networkState);
-        console.error("❌ Erreur lecture vidéo complète:", error);
-        
-        if (error?.name !== 'AbortError') {
-          // Réessayer avec muted pour Safari
-          if (isSafari || isIOS) {
-            try {
-              debugLog('🔄 Retry muted...');
-              videoRef.current.muted = true;
-              videoRef.current.volume = 0;
-              // Recharger la vidéo avant retry
-              videoRef.current.load();
-              await new Promise(resolve => setTimeout(resolve, 500));
-              await videoRef.current.play();
-              debugLog('✅ Retry réussi !');
-              // Unmute après 100ms
-              setTimeout(() => {
-                if (videoRef.current && currentVideo === "introduction") {
-                  videoRef.current.muted = false;
-                  videoRef.current.volume = videoVolume;
-                }
-              }, 100);
-            } catch (retryError: any) {
-              const retryMsg = retryError.message || retryError.name || 'Unknown';
-              debugLog('❌ Retry failed: ' + retryMsg);
-              debugLog('📊 Final readyState: ' + videoRef.current.readyState);
-              console.error("❌ Retry échoué complet:", retryError);
-            }
+        } catch (playError: any) {
+          debugLog('❌ Play direct échoué: ' + playError.message);
+          debugLog('📊 readyState: ' + videoRef.current.readyState + ' networkState: ' + videoRef.current.networkState);
+          
+          // Dernier recours : attendre loadedmetadata
+          try {
+            debugLog('⏳ Attente loadedmetadata...');
+            await new Promise((resolve, reject) => {
+              if (!videoRef.current) return reject();
+              
+              const timeout = setTimeout(() => {
+                debugLog('⏰ Timeout loadedmetadata');
+                reject(new Error('Timeout'));
+              }, 5000);
+              
+              videoRef.current.addEventListener('loadedmetadata', () => {
+                clearTimeout(timeout);
+                debugLog('✅ loadedmetadata reçu - readyState: ' + videoRef.current?.readyState);
+                resolve(null);
+              }, { once: true });
+            });
+            
+            // Réessayer play après metadata
+            await videoRef.current.play();
+            debugLog('✅ Play après metadata réussi !');
+            
+            setTimeout(() => {
+              if (videoRef.current && currentVideo === "introduction") {
+                videoRef.current.muted = false;
+                videoRef.current.volume = videoVolume;
+              }
+            }, 100);
+          } catch (finalError: any) {
+            debugLog('❌ Échec final: ' + finalError.message);
           }
+        }
+      } else {
+        // Mode non-Safari (ancien code)
+        if (videoRef.current.src !== videoUrl) {
+          videoRef.current.src = videoUrl;
+          videoRef.current.load();
+        }
+        
+        try {
+          await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+          debugLog('✅ Vidéo lancée avec succès');
+        } catch (error: any) {
+          debugLog('❌ Erreur: ' + error.message);
         }
       }
       
