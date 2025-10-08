@@ -40,9 +40,15 @@ export default function Home() {
   const isIOS = typeof navigator !== 'undefined' && (
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     // Détection iPad moderne (iPadOS 13+) qui se fait passer pour Mac
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+    // Détection via touch sur Mac (probablement iPad)
+    (navigator.userAgent.includes('Macintosh') && 'ontouchend' in document)
   );
-  const isSafari = typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  const isSafari = typeof navigator !== 'undefined' && (
+    /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
+    // Détection explicite WebKit + Safari version
+    (navigator.userAgent.includes('AppleWebKit') && navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome'))
+  );
   
   // Log de détection au montage
   useEffect(() => {
@@ -51,7 +57,12 @@ export default function Home() {
       isSafari,
       userAgent: navigator.userAgent,
       platform: navigator.platform,
-      maxTouchPoints: navigator.maxTouchPoints
+      maxTouchPoints: navigator.maxTouchPoints,
+      hasTouch: 'ontouchend' in document,
+      isMacintosh: navigator.userAgent.includes('Macintosh'),
+      hasAppleWebKit: navigator.userAgent.includes('AppleWebKit'),
+      hasSafariInUA: navigator.userAgent.includes('Safari'),
+      hasChrome: navigator.userAgent.includes('Chrome')
     });
   }, []);
   
@@ -749,8 +760,13 @@ export default function Home() {
       const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                            window.innerWidth <= 768 ||
                            ('ontouchstart' in window) ||
-                           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad moderne
-      console.log('📱 isMobileDevice détecté:', isMobileDevice);
+                           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || // iPad moderne
+                           (navigator.userAgent.includes('Macintosh') && 'ontouchend' in document); // iPad via touch
+      console.log('📱 isMobileDevice détecté:', isMobileDevice, {
+        hasTouch: 'ontouchstart' in window,
+        isMacTouch: navigator.userAgent.includes('Macintosh') && 'ontouchend' in document,
+        windowWidth: window.innerWidth
+      });
       setIsMobile(isMobileDevice);
     };
     
