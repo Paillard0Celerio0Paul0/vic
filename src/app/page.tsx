@@ -1294,8 +1294,6 @@ export default function Home() {
           />
           );
         })()}
-        
-
       
             {/* Affichage du score */}
             {showScore && (
