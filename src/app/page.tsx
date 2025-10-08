@@ -26,7 +26,7 @@ export default function Home() {
   const [explanatoryVideo, setExplanatoryVideo] = useState<string | null>(null);
   const [showExplanatoryVideo, setShowExplanatoryVideo] = useState(false);
   const explanatoryVideoRef = useRef<HTMLVideoElement>(null);
-  const [score, setScore] = useState(0);
+  const [score, setScore] = useState(9);
   const [validatedObjects, setValidatedObjects] = useState<Set<string>>(new Set());
   const [showScore, setShowScore] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
@@ -35,6 +35,8 @@ export default function Home() {
   const [mainMusicPosition, setMainMusicPosition] = useState(0);
   const [introductionUrl] = useState("https://ntpqkpm4vpvltypf.public.blob.vercel-storage.com/introduction");
   const [showArrows, setShowArrows] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(true); // Mettre à false pour masquer les logs
 
   // Détection iOS/Safari et gestion du déverrouillage audio
   const isIOS = typeof navigator !== 'undefined' && (
@@ -52,7 +54,7 @@ export default function Home() {
   
   // Log de détection au montage
   useEffect(() => {
-    console.log('🔍 Détections navigateur:', {
+    const detectionInfo = {
       isIOS,
       isSafari,
       userAgent: navigator.userAgent,
@@ -63,13 +65,22 @@ export default function Home() {
       hasAppleWebKit: navigator.userAgent.includes('AppleWebKit'),
       hasSafariInUA: navigator.userAgent.includes('Safari'),
       hasChrome: navigator.userAgent.includes('Chrome')
-    });
+    };
+    console.log('🔍 Détections navigateur:', detectionInfo);
+    debugLog('🔍 isIOS=' + isIOS + ' isSafari=' + isSafari + ' maxTouch=' + navigator.maxTouchPoints);
   }, []);
   
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [needAudioEnableUI, setNeedAudioEnableUI] = useState(false);
 
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // Fonction pour logger sur la page ET dans la console
+  const debugLog = (message: string, data?: any) => {
+    const logMessage = data ? `${message} ${JSON.stringify(data)}` : message;
+    console.log(message, data);
+    setDebugLogs(prev => [...prev.slice(-20), logMessage]); // Garde les 20 derniers logs
+  };
 
   const unlockAudioFromGesture = async () => {
     if (!audioRef.current) return;
@@ -664,19 +675,19 @@ export default function Home() {
   };
 
   const handlePlay = async () => {
-    console.log('🎬 handlePlay démarré', { isIOS, isSafari, currentVideo });
+    debugLog('🎬 handlePlay démarré');
     setIsPlaying(true);
     setVideoEnded(false);
 
     if (audioRef.current && (isIOS || isSafari) && !audioUnlocked) {
-      console.log('🔓 Tentative unlock audio...');
+      debugLog('🔓 Tentative unlock audio...');
       await unlockAudioFromGesture();
     }
 
     // Démarrer la vidéo et l'audio
     if (videoRef.current && audioRef.current) {
       const videoUrl = getOptimizedVideoUrl(currentVideo);
-      console.log('📹 URL vidéo:', videoUrl);
+      debugLog('📹 URL: ' + videoUrl.substring(0, 50) + '...');
       
       if (videoRef.current.src !== videoUrl) {
         videoRef.current.src = videoUrl;
@@ -685,7 +696,7 @@ export default function Home() {
       
       // Pour Safari/iPad, démarrer TOUJOURS muted puis unmute après
       if (isSafari || isIOS) {
-        console.log('🍎 Mode Safari/iOS détecté - démarrage muted');
+        debugLog('🍎 Mode Safari/iOS - démarrage muted');
         videoRef.current.muted = true;
         videoRef.current.volume = 0;
         
@@ -702,27 +713,28 @@ export default function Home() {
       }
       
       try {
-        console.log('▶️ Tentative lecture vidéo...');
+        debugLog('▶️ Tentative lecture vidéo...');
         await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-        console.log('✅ Vidéo lancée avec succès');
+        debugLog('✅ Vidéo lancée avec succès');
         
         // Unmute après démarrage réussi pour Safari
         if ((isSafari || isIOS) && currentVideo === "introduction") {
           setTimeout(() => {
             if (videoRef.current) {
-              console.log('🔊 Unmute vidéo introduction');
+              debugLog('🔊 Unmute vidéo introduction');
               videoRef.current.muted = false;
               videoRef.current.volume = videoVolume;
             }
           }, 100);
         }
       } catch (error: any) {
+        debugLog('❌ Erreur lecture: ' + error.name);
         console.error("❌ Erreur lecture vidéo:", error);
         if (error?.name !== 'AbortError') {
           // Réessayer avec muted pour Safari
           if (isSafari || isIOS) {
             try {
-              console.log('🔄 Retry avec muted...');
+              debugLog('🔄 Retry avec muted...');
               videoRef.current.muted = true;
               await videoRef.current.play();
               // Unmute après 100ms
@@ -733,6 +745,7 @@ export default function Home() {
                 }
               }, 100);
             } catch (retryError) {
+              debugLog('❌ Retry échoué');
               console.error("❌ Retry échoué:", retryError);
             }
           }
@@ -1405,6 +1418,33 @@ export default function Home() {
           </>
         )}
       </div>
+
+      {/* Console de debug visible sur la page */}
+      {showDebug && (
+        <div 
+          className="fixed bottom-0 left-0 right-0 bg-black bg-opacity-90 text-white text-xs p-2 max-h-48 overflow-y-auto z-50 font-mono"
+          style={{ fontSize: '10px' }}
+        >
+          <div className="flex justify-between items-center mb-1 border-b border-gray-600 pb-1">
+            <span className="font-bold">🐛 Console Debug</span>
+            <button 
+              onClick={() => setShowDebug(false)}
+              className="text-red-500 hover:text-red-300 px-2"
+            >
+              ✕
+            </button>
+          </div>
+          {debugLogs.length === 0 ? (
+            <div className="text-gray-400">Aucun log pour le moment...</div>
+          ) : (
+            debugLogs.map((log, index) => (
+              <div key={index} className="py-0.5 border-b border-gray-800">
+                {log}
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 } 
