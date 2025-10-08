@@ -1311,25 +1311,6 @@ export default function Home() {
             )}
 
             {/* Bouton fallback Activer le son pendant le jeu */}
-            {needAudioEnableUI && (
-              <div className="absolute inset-x-0 top-4 flex justify-center z-20">
-                <button
-                  onClick={async () => {
-                    await unlockAudioFromGesture();
-                    if (audioRef.current) {
-                      try {
-                        await playWithRetry(audioRef.current);
-                        audioRef.current.volume = videoVolume;
-                        setNeedAudioEnableUI(false);
-                      } catch {}
-                    }
-                  }}
-                  className="dogica-white text-base bg-transparent border-2 border-white px-4 py-2 rounded-lg hover:bg-white hover:text-black transition-all"
-                >
-                  Activer le son
-                </button>
-              </div>
-            )}
 
             {/* Flèche de retour - visible uniquement à la fin des vidéos d'objets */}
             {videoType === "objet" && videoEnded && (
