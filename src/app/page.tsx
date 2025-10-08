@@ -81,7 +81,7 @@ export default function Home() {
       }
       
       // Configurer le muted selon la vidéo AVANT de charger
-      const needsSound = videoId === "introduction" || videoId === "outro";
+      const needsSound = videoId === "introduction" || videoId === "outro" || videoId.startsWith("objet_");
       if (isSafari || isIOS) {
         // Sur Safari/iOS, toujours démarrer muted pour l'autoplay
         videoRef.current.muted = true;
@@ -112,7 +112,12 @@ export default function Home() {
           setTimeout(() => {
             if (videoRef.current) {
               videoRef.current.muted = false;
-              videoRef.current.volume = 1.0;
+              // Pour les vidéos objet, utiliser un volume plus faible pour éviter conflit avec la musique
+              if (videoId.startsWith("objet_")) {
+                videoRef.current.volume = 0.7;
+              } else {
+                videoRef.current.volume = 1.0;
+              }
               setDebugMessage("");
             }
           }, 100);
@@ -171,31 +176,42 @@ export default function Home() {
 
   // Fonction pour charger et jouer une vidéo explicative (text_x)
   const loadAndPlayExplanatoryVideo = async (videoId: string) => {
-    if (!explanatoryVideoRef.current) return;
+    if (!explanatoryVideoRef.current) {
+      console.error("❌ explanatoryVideoRef est null !");
+      setDebugMessage("❌ ref null");
+      return;
+    }
     
     try {
+      console.log("📺 Chargement vidéo explicative:", videoId);
       setDebugMessage("📺 Text " + videoId.replace("text_", "") + "...");
       const videoUrl = getOptimizedVideoUrlNoRange(videoId);
+      console.log("📺 URL:", videoUrl);
       
       // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
       if (isSafari || isIOS) {
+        console.log("📥 Fetch blob pour Safari/iOS...");
         const response = await fetch(videoUrl);
         const blob = await response.blob();
         const videoBlob = new Blob([blob], { type: 'video/mp4' });
         const blobUrl = URL.createObjectURL(videoBlob);
         
         explanatoryVideoRef.current.src = blobUrl;
+        console.log("✅ Blob URL créé:", blobUrl);
       } else {
+        console.log("📺 URL directe pour desktop");
         explanatoryVideoRef.current.src = videoUrl;
       }
       
       explanatoryVideoRef.current.load();
       await playWithRetry(explanatoryVideoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+      console.log("✅ Vidéo explicative lancée");
       setDebugMessage("✅ Text OK");
       setTimeout(() => setDebugMessage(""), 2000);
     } catch (error: any) {
-      setDebugMessage("❌ Text error: " + (error.message || error.name));
-      console.error("Erreur chargement vidéo explicative:", error);
+      const errorMsg = error.message || error.name || "Unknown";
+      console.error("❌ Erreur vidéo explicative:", error);
+      setDebugMessage("❌ Text error: " + errorMsg);
       setTimeout(() => setDebugMessage(""), 5000);
     }
   };
@@ -308,6 +324,7 @@ export default function Home() {
         
         // Après 6 secondes, lancer outro_song
         setTimeout(async () => {
+          setDebugMessage("🎵 Déclenchement outro_song...");
           if (audioRef.current) {
             audioRef.current.volume = videoVolume;
             audioRef.current.loop = false;
@@ -315,6 +332,7 @@ export default function Home() {
               await loadAndPlayAudio("outro_song");
             } catch (error) {
               console.error("❌ Erreur lecture outro_song:", error);
+              setDebugMessage("❌ Erreur outro_song");
             }
           }
         }, 6000);
@@ -459,9 +477,8 @@ export default function Home() {
       explanatoryVideoRef.current.currentTime = 0;
     }
 
-    // Charger et lancer la vidéo objet
+    // Charger et lancer la vidéo objet (le volume est géré dans loadAndPlayVideo)
     if (videoRef.current) {
-      videoRef.current.volume = 0;
       loadAndPlayVideo(objetVideo);
     }
 
@@ -503,9 +520,10 @@ export default function Home() {
   // Gestionnaire pour vérifier le temps de la vidéo
   const handleTimeUpdate = () => {
     if (videoRef.current) {
-      // À 39 secondes de la vidéo d'introduction : lancer la musique (5 secondes plus tôt)
+      // À 40 secondes de la vidéo d'introduction : lancer la musique
       if (currentVideo === "introduction" && videoRef.current.currentTime >= 40 && audioRef.current) {
         if (audioRef.current.paused) {
+          setDebugMessage("🎵 Déclenchement main_song...");
           (async () => {
             try {
               if ((isIOS || isSafari) && !audioUnlocked) {
@@ -517,6 +535,7 @@ export default function Home() {
               setNeedAudioEnableUI(false);
             } catch (error) {
               console.error("❌ Erreur lecture main_song:", error);
+              setDebugMessage("❌ Erreur main_song");
               setNeedAudioEnableUI(true);
             }
           })();
@@ -621,11 +640,14 @@ export default function Home() {
         // Déclencher la vidéo explicative au bon timing
         if (timing && videoRef.current.currentTime >= timing && explanatoryVideo) {
           if (!showExplanatoryVideo) {
+            setDebugMessage(`📺 Déclenchement text_${objetType} à ${timing}s...`);
             setShowExplanatoryVideo(true);
             
             // Charger et jouer la vidéo explicative
             if (explanatoryVideoRef.current) {
               loadAndPlayExplanatoryVideo(explanatoryVideo);
+            } else {
+              setDebugMessage("❌ explanatoryVideoRef null");
             }
           }
         }
@@ -965,7 +987,7 @@ export default function Home() {
           playsInline
           webkit-playsinline="true"
           preload="none"
-          muted={currentVideo === "introduction" || currentVideo === "outro" ? false : true}
+          muted={currentVideo === "introduction" || currentVideo === "outro" || currentVideo.startsWith("objet_") ? false : true}
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
           onError={(e) => console.error('❌ Erreur vidéo:', e)}

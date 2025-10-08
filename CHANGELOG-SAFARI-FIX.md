@@ -137,28 +137,53 @@ await put(fileName, fileBuffer, {
 
 ---
 
-## 🐛 Problèmes résolus (8 Octobre - 18h00)
+## 🐛 Corrections appliquées (8 Octobre - Session 2)
 
-### Problème Desktop - Erreur ORB
-**Cause** : L'attribut `crossOrigin="anonymous"` sur la vidéo explicative déclenchait des erreurs ORB (Opaque Response Blocking) car Vercel Blob ne retourne pas les headers CORS nécessaires.
+### 1. Erreur ORB sur Desktop ✅
+**Cause** : `crossOrigin="anonymous"` déclenchait des erreurs ORB
 
 **Solution** : 
-- ✅ Suppression de l'attribut `crossOrigin`
-- ✅ Suppression du `src` statique dans le JSX de la vidéo explicative
-- ✅ Chargement du src uniquement via `loadAndPlayExplanatoryVideo()`
+- Suppression de `crossOrigin`
+- Suppression du `src` statique dans le JSX
+- Chargement via `loadAndPlayExplanatoryVideo()` uniquement
 
-### Problème Safari/iPad/iPhone - Vidéos text_x
-**Cause** : La vidéo explicative recevait un `src` avec mauvais Content-Type AVANT la création du Blob URL. Safari refusait de continuer même après rechargement.
+### 2. Vidéos text_x ne s'affichent pas ✅
+**Cause** : Logique de déclenchement supprimée par erreur
 
 **Solution** :
-- ✅ Pas de `src` initial dans le JSX
-- ✅ Chargement différé via `loadAndPlayExplanatoryVideo()` au bon timing
-- ✅ Utilisation systématique de Blob URL avec `type: 'video/mp4'`
+- Vidéo explicative sans `src` initial dans le JSX
+- Chargement déclenché dans `handleTimeUpdate()` au bon timing
+- Logs de debug ajoutés pour diagnostiquer
 
-### Statut actuel
-- ✅ Desktop (Chrome, Firefox, Edge) : **Fonctionne sans erreur ORB**
-- ✅ Safari/iPad/iPhone : **Vidéos text_x se lancent correctement**
-- ✅ main_song et outro_song : **Fonctionnent via loadAndPlayAudio()**
+### 3. Vidéos objet sans son ✅
+**Cause** : `videoRef.current.volume = 0` et `muted={true}` forcés
+
+**Solution** :
+- Ajout des vidéos objet dans `needsSound`
+- Suppression du `volume = 0` dans `handleZoneClick`
+- Unmute automatique avec volume 0.7 pour les objets
+- Mise à jour du JSX : `muted={false}` pour les vidéos objet
+
+### 4. main_song ne se joue pas ✅
+**Cause** : Pas de logs de debug, difficile à diagnostiquer
+
+**Solution** :
+- Ajout de `setDebugMessage("🎵 Déclenchement main_song...")` à 40s
+- Logs d'erreur si échec
+- Vérification unlock audio pour Safari/iOS
+
+### 5. outro_song ne se joue pas ✅
+**Cause** : Pas de logs de debug
+
+**Solution** :
+- Ajout de `setDebugMessage("🎵 Déclenchement outro_song...")` après 6s
+- Logs d'erreur si échec
+
+### 6. Logs de debug améliorés ✅
+**Solution** :
+- Console.log dans `loadAndPlayExplanatoryVideo()` pour desktop
+- Messages de debug pour Safari/iOS visibles en haut de l'écran
+- Meilleure traçabilité des problèmes
 
 ---
 
