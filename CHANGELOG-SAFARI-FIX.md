@@ -187,12 +187,81 @@ await put(fileName, fileBuffer, {
 
 ---
 
+## 🐛 Corrections critiques (8 Octobre - Session 3)
+
+### Problème 1 : explanatoryVideoRef null ✅
+**Cause** : On essayait de charger la vidéo explicative AVANT que React ne la monte dans le DOM
+
+**Solution** :
+- Ajout d'un `useEffect` qui se déclenche quand `showExplanatoryVideo` devient true
+- Dans `handleTimeUpdate`, on active juste `setShowExplanatoryVideo(true)`
+- Le chargement réel se fait dans `useEffect` quand le ref existe
+
+### Problème 2 : main_song logs mais ne joue pas (iPad) 🔍
+**Solution** :
+- Ajout de logs console détaillés à chaque étape de `loadAndPlayAudio()`
+- Logs des réponses fetch, taille blob, création Blob URL
+- Logs des tentatives de play pour identifier où ça bloque
+
+### Problème 3 : Son des vidéos objet ✅
+**Clarification** : Le son des vidéos objet est dans des fichiers séparés (_song), pas dans la vidéo
+
+**Correction** :
+- Retrait des vidéos objet de `needsSound`
+- Vidéos objet toujours en `muted={true}`
+- Le son vient uniquement des fichiers `*_song` (boxe_song, foot_song, etc.)
+
+---
+
+## 🔍 Diagnostic approfondi - Vidéos text_x (Session 4)
+
+### Observation : Aucun appel réseau vers text_x
+**Constat** : Onglet Network ne montre aucune requête vers les vidéos text_x
+**Conclusion** : `loadAndPlayExplanatoryVideo()` n'est jamais appelée
+
+### Nouveaux logs de diagnostic ajoutés
+
+#### 1. Dans `handleTimeUpdate` (vidéos objet)
+```typescript
+// Log toutes les 2 secondes
+⏱️ Objet velo: 4.2s / timing: 6s, explanatoryVideo: text_velo, showExplanatoryVideo: false
+
+// Au déclenchement
+📺 DÉCLENCHEMENT text_velo à 6.1s (timing: 6s)
+```
+
+#### 2. Dans `useEffect` (surveillance vidéo explicative)
+```typescript
+// À chaque changement de showExplanatoryVideo ou explanatoryVideo
+🔄 useEffect vidéo explicative déclenché: { 
+  showExplanatoryVideo: true, 
+  explanatoryVideo: "text_velo", 
+  refExists: true 
+}
+
+// Si conditions OK
+🎬 useEffect: Conditions OK → Chargement vidéo explicative text_velo
+
+// Si ref null (avec retry automatique après 100ms)
+⚠️ useEffect: ref null malgré showExplanatoryVideo=true, retry dans 100ms...
+```
+
+### Ce que ces logs vont révéler
+
+1. **Timing atteint ?** → Logs `⏱️` montrent la progression
+2. **Déclenchement ?** → Log `📺 DÉCLENCHEMENT` 
+3. **useEffect activé ?** → Log `🔄 useEffect`
+4. **Ref disponible ?** → `refExists: true/false`
+5. **Chargement lancé ?** → Log `🎬 useEffect: Conditions OK`
+
+---
+
 ## 🔄 Prochaines étapes
 
-1. Diagnostiquer pourquoi `loadAndPlayAudio()` et `loadAndPlayExplanatoryVideo()` ne sont pas appelées
-2. Vérifier les déclencheurs (timeUpdate, onCanPlay)
-3. Tester avec messages de debug sur iPad
-4. Une fois fonctionnel, retirer les messages de debug
+1. Tester sur Desktop ET iPad
+2. Ouvrir la console et observer les logs
+3. Cliquer sur un objet et **identifier exactement** où le flux se rompt
+4. Une fois le problème identifié, appliquer la correction ciblée
 
 ---
 

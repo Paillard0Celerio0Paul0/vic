@@ -81,7 +81,8 @@ export default function Home() {
       }
       
       // Configurer le muted selon la vidéo AVANT de charger
-      const needsSound = videoId === "introduction" || videoId === "outro" || videoId.startsWith("objet_");
+      // Note: Les vidéos objet n'ont pas de son (le son est dans les fichiers _song)
+      const needsSound = videoId === "introduction" || videoId === "outro";
       if (isSafari || isIOS) {
         // Sur Safari/iOS, toujours démarrer muted pour l'autoplay
         videoRef.current.muted = true;
@@ -112,12 +113,7 @@ export default function Home() {
           setTimeout(() => {
             if (videoRef.current) {
               videoRef.current.muted = false;
-              // Pour les vidéos objet, utiliser un volume plus faible pour éviter conflit avec la musique
-              if (videoId.startsWith("objet_")) {
-                videoRef.current.volume = 0.7;
-              } else {
-                videoRef.current.volume = 1.0;
-              }
+              videoRef.current.volume = 1.0;
               setDebugMessage("");
             }
           }, 100);
@@ -141,35 +137,50 @@ export default function Home() {
 
   // Fonction pour charger et jouer un audio sur Safari/iOS
   const loadAndPlayAudio = async (audioId: string) => {
-    if (!audioRef.current) return;
+    if (!audioRef.current) {
+      console.error("❌ audioRef est null !");
+      setDebugMessage("❌ audioRef null");
+      return;
+    }
     
     try {
+      console.log("🎵 Chargement audio:", audioId);
       setDebugMessage("🎵 Chargement " + audioId + "...");
       const audioUrl = getBlobUrl(audioId);
+      console.log("🎵 URL audio:", audioUrl);
       
       // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type
       if (isSafari || isIOS) {
+        console.log("📥 Fetch blob audio pour Safari/iOS...");
         setDebugMessage("📥 Fetch audio...");
         const response = await fetch(audioUrl);
+        console.log("📥 Réponse fetch:", response.status);
         const blob = await response.blob();
+        console.log("📥 Blob reçu, taille:", blob.size);
         // Déterminer le type MIME correct
         const mimeType = audioId.includes('song') ? 'audio/mpeg' : 'audio/mp4';
         const audioBlob = new Blob([blob], { type: mimeType });
         const blobUrl = URL.createObjectURL(audioBlob);
+        console.log("✅ Blob URL audio créé:", blobUrl);
         
         setDebugMessage("▶️ Play audio...");
         audioRef.current.src = blobUrl;
       } else {
+        console.log("🎵 URL directe pour desktop");
         audioRef.current.src = audioUrl;
       }
       
+      console.log("🔄 Load audio...");
       audioRef.current.load();
+      console.log("▶️ Play avec retry...");
       await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+      console.log("✅ Audio lancé avec succès");
       setDebugMessage("✅ Audio OK");
       setTimeout(() => setDebugMessage(""), 2000);
     } catch (error: any) {
-      setDebugMessage("❌ Audio error: " + (error.message || error.name));
-      console.error("Erreur chargement audio:", error);
+      const errorMsg = error.message || error.name || "Unknown";
+      console.error("❌ Erreur chargement audio:", error);
+      setDebugMessage("❌ Audio: " + errorMsg);
       setTimeout(() => setDebugMessage(""), 5000);
     }
   };
@@ -635,20 +646,20 @@ export default function Home() {
       else if (videoType === "objet" && videoRef.current) {
         const objetType = currentVideo.replace("objet_", "");
         const timing = explanatoryVideoTimings[objetType as keyof typeof explanatoryVideoTimings];
+        const currentTime = videoRef.current.currentTime;
         
+        // Log de debug pour voir l'état
+        if (currentTime % 2 < 0.1) { // Log toutes les 2 secondes environ
+          console.log(`⏱️ Objet ${objetType}: ${currentTime.toFixed(1)}s / timing: ${timing}s, explanatoryVideo: ${explanatoryVideo}, showExplanatoryVideo: ${showExplanatoryVideo}`);
+        }
         
         // Déclencher la vidéo explicative au bon timing
-        if (timing && videoRef.current.currentTime >= timing && explanatoryVideo) {
+        if (timing && currentTime >= timing && explanatoryVideo) {
           if (!showExplanatoryVideo) {
-            setDebugMessage(`📺 Déclenchement text_${objetType} à ${timing}s...`);
+            console.log(`📺 DÉCLENCHEMENT text_${objetType} à ${currentTime.toFixed(1)}s (timing: ${timing}s)`);
+            setDebugMessage(`📺 Déclenchement text_${objetType}...`);
+            // Activer l'affichage - le chargement se fera via useEffect
             setShowExplanatoryVideo(true);
-            
-            // Charger et jouer la vidéo explicative
-            if (explanatoryVideoRef.current) {
-              loadAndPlayExplanatoryVideo(explanatoryVideo);
-            } else {
-              setDebugMessage("❌ explanatoryVideoRef null");
-            }
           }
         }
         // Vérifier si la vidéo objet est terminée
@@ -912,9 +923,31 @@ export default function Home() {
     }
   }, [videoVolume, currentVideo]);
 
-  // Surveiller la création de la vidéo explicative
+  // Surveiller la création de la vidéo explicative et la charger quand elle apparaît
   useEffect(() => {
+    console.log("🔄 useEffect vidéo explicative déclenché:", { 
+      showExplanatoryVideo, 
+      explanatoryVideo, 
+      refExists: !!explanatoryVideoRef.current 
+    });
+    
     if (showExplanatoryVideo && explanatoryVideo && explanatoryVideoRef.current) {
+      console.log("🎬 useEffect: Conditions OK → Chargement vidéo explicative", explanatoryVideo);
+      loadAndPlayExplanatoryVideo(explanatoryVideo);
+    } else {
+      if (showExplanatoryVideo && explanatoryVideo && !explanatoryVideoRef.current) {
+        console.warn("⚠️ useEffect: ref null malgré showExplanatoryVideo=true, retry dans 100ms...");
+        // Petit délai pour laisser React monter le composant
+        const timer = setTimeout(() => {
+          if (explanatoryVideoRef.current) {
+            console.log("🎬 useEffect (retry): ref maintenant disponible");
+            loadAndPlayExplanatoryVideo(explanatoryVideo);
+          } else {
+            console.error("❌ useEffect (retry): ref toujours null !");
+          }
+        }, 100);
+        return () => clearTimeout(timer);
+      }
     }
   }, [showExplanatoryVideo, explanatoryVideo]);
 
@@ -987,7 +1020,7 @@ export default function Home() {
           playsInline
           webkit-playsinline="true"
           preload="none"
-          muted={currentVideo === "introduction" || currentVideo === "outro" || currentVideo.startsWith("objet_") ? false : true}
+          muted={currentVideo === "introduction" || currentVideo === "outro" ? false : true}
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
           onError={(e) => console.error('❌ Erreur vidéo:', e)}
