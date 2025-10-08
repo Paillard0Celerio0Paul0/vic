@@ -37,8 +37,24 @@ export default function Home() {
   const [showArrows, setShowArrows] = useState(false);
 
   // Détection iOS/Safari et gestion du déverrouillage audio
-  const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isIOS = typeof navigator !== 'undefined' && (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    // Détection iPad moderne (iPadOS 13+) qui se fait passer pour Mac
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
   const isSafari = typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  
+  // Log de détection au montage
+  useEffect(() => {
+    console.log('🔍 Détections navigateur:', {
+      isIOS,
+      isSafari,
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      maxTouchPoints: navigator.maxTouchPoints
+    });
+  }, []);
+  
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [needAudioEnableUI, setNeedAudioEnableUI] = useState(false);
 
@@ -637,26 +653,30 @@ export default function Home() {
   };
 
   const handlePlay = async () => {
+    console.log('🎬 handlePlay démarré', { isIOS, isSafari, currentVideo });
     setIsPlaying(true);
     setVideoEnded(false);
 
     if (audioRef.current && (isIOS || isSafari) && !audioUnlocked) {
+      console.log('🔓 Tentative unlock audio...');
       await unlockAudioFromGesture();
     }
 
     // Démarrer la vidéo et l'audio
     if (videoRef.current && audioRef.current) {
       const videoUrl = getOptimizedVideoUrl(currentVideo);
+      console.log('📹 URL vidéo:', videoUrl);
       
       if (videoRef.current.src !== videoUrl) {
         videoRef.current.src = videoUrl;
         videoRef.current.load();
       }
       
-      // Pour Safari, il faut s'assurer que la vidéo est bien chargée avant de la lancer
-      if (isSafari) {
-        videoRef.current.muted = false;
-        videoRef.current.volume = currentVideo === "introduction" ? videoVolume : 0;
+      // Pour Safari/iPad, démarrer TOUJOURS muted puis unmute après
+      if (isSafari || isIOS) {
+        console.log('🍎 Mode Safari/iOS détecté - démarrage muted');
+        videoRef.current.muted = true;
+        videoRef.current.volume = 0;
         
         // Attendre que la vidéo soit prête
         await new Promise((resolve) => {
@@ -671,24 +691,44 @@ export default function Home() {
       }
       
       try {
+        console.log('▶️ Tentative lecture vidéo...');
         await playWithRetry(videoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+        console.log('✅ Vidéo lancée avec succès');
+        
+        // Unmute après démarrage réussi pour Safari
+        if ((isSafari || isIOS) && currentVideo === "introduction") {
+          setTimeout(() => {
+            if (videoRef.current) {
+              console.log('🔊 Unmute vidéo introduction');
+              videoRef.current.muted = false;
+              videoRef.current.volume = videoVolume;
+            }
+          }, 100);
+        }
       } catch (error: any) {
         console.error("❌ Erreur lecture vidéo:", error);
         if (error?.name !== 'AbortError') {
           // Réessayer avec muted pour Safari
-          if (isSafari) {
+          if (isSafari || isIOS) {
             try {
+              console.log('🔄 Retry avec muted...');
               videoRef.current.muted = true;
               await videoRef.current.play();
-              videoRef.current.muted = false;
-            } catch {}
+              // Unmute après 100ms
+              setTimeout(() => {
+                if (videoRef.current && currentVideo === "introduction") {
+                  videoRef.current.muted = false;
+                  videoRef.current.volume = videoVolume;
+                }
+              }, 100);
+            } catch (retryError) {
+              console.error("❌ Retry échoué:", retryError);
+            }
           }
         }
       }
       
       if (currentVideo === "introduction") {
-        videoRef.current.volume = videoVolume;
-        videoRef.current.muted = false;
         audioRef.current.pause();
       } else {
         videoRef.current.volume = 0;
@@ -708,7 +748,9 @@ export default function Home() {
     const checkMobile = () => {
       const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                            window.innerWidth <= 768 ||
-                           ('ontouchstart' in window);
+                           ('ontouchstart' in window) ||
+                           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad moderne
+      console.log('📱 isMobileDevice détecté:', isMobileDevice);
       setIsMobile(isMobileDevice);
     };
     
@@ -1070,11 +1112,13 @@ export default function Home() {
           }
           playsInline
           webkit-playsinline="true"
+          autoPlay={false}
           preload={isSafari ? "metadata" : (currentVideo === "outro" || currentVideo === "generique" ? "metadata" : "none")}
           crossOrigin="anonymous"
-          muted={isMobile && currentVideo !== "introduction"} // Important pour mobile, sauf introduction
+          muted={(isMobile || isSafari || isIOS) && currentVideo !== "introduction"} // Important pour mobile/Safari/iOS, sauf introduction
           onTimeUpdate={handleTimeUpdate}
           onLoadedData={handleVideoLoaded}
+          onError={(e) => console.error('❌ Erreur vidéo principale:', e)}
           style={{
             width: '100%',
             height: '100%',
