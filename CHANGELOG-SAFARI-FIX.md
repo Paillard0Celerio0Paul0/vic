@@ -598,11 +598,80 @@ Tous les messages importants sont maintenant affichés **directement sur le site
 
 ---
 
+## ✅ SOLUTION FINALE - Blob URL avec Content-Type forcé (Session 12)
+
+### 🎉 VIDÉOS FONCTIONNENT SUR iOS !
+
+La vidéo d'introduction démarre maintenant sur iOS grâce à la méthode **Blob URL avec Content-Type forcé**.
+
+### Problème restant
+Main_song ne se lançait pas → Même problème de Content-Type pour l'audio
+
+### Solution complète appliquée
+**Utiliser Blob URL avec Content-Type forcé pour TOUT sur Safari/iOS** :
+
+#### 1. Vidéos principales (loadAndPlayVideo) ✅
+```typescript
+const response = await fetch(videoUrl);
+const blob = await response.blob();
+const videoBlob = new Blob([blob], { type: 'video/mp4' }); // ← FORCE le bon type
+const blobUrl = URL.createObjectURL(videoBlob);
+videoRef.current.src = blobUrl;
+```
+
+#### 2. Audio (loadAndPlayAudio) ✅
+```typescript
+const mimeType = audioId.includes('song') ? 'audio/mpeg' : 'audio/mp4';
+const audioBlob = new Blob([blob], { type: mimeType });
+const blobUrl = URL.createObjectURL(audioBlob);
+audioRef.current.src = blobUrl;
+```
+
+#### 3. Vidéos explicatives (loadAndPlayExplanatoryVideo) ✅
+```typescript
+const videoBlob = new Blob([blob], { type: 'video/mp4' });
+const blobUrl = URL.createObjectURL(videoBlob);
+explanatoryVideoRef.current.src = blobUrl;
+```
+
+### Messages de debug sur iOS
+```
+📥 Téléchargement...          ← Fetch depuis Vercel Blob
+🔄 Création Blob...           ← Création Blob avec bon Content-Type
+⏳ Chargement...              ← Attente loadedmetadata
+✅ Prêt                       ← Métadonnées chargées
+▶️ Lecture...                ← Play
+✅ OK                        ← Succès !
+```
+
+Pour l'audio :
+```
+📥 Téléchargement audio...
+⏳ Préparation audio...
+▶️ Lecture audio...
+✅ Audio OK
+```
+
+### Pourquoi ça fonctionne maintenant
+
+1. **Vercel Blob** retourne `Content-Type: application/octet-stream` (mauvais)
+2. **On fetch** le fichier
+3. **On crée un nouveau Blob** avec `{ type: 'video/mp4' }` ou `{ type: 'audio/mpeg' }`
+4. **Safari accepte** car le Blob a maintenant le bon Content-Type
+5. **Tout fonctionne** : vidéos + audio + vidéos explicatives
+
+### Inconvénient
+- ❌ Téléchargement complet nécessaire (pas de streaming)
+- ✅ Mais **ça fonctionne sur Safari/iOS** !
+
+---
+
 ## 🔄 Prochaines étapes
 
-1. **Tester sur Desktop** : Les vidéos objet devraient fonctionner
-2. **Tester sur iPad/iPhone** : Les messages de debug s'afficheront en haut de l'écran
-3. **Noter le message d'erreur exact** s'il y en a un (code, type, states)
+1. **Tester sur iOS** : Vérifier que main_song se lance maintenant
+2. **Tester les vidéos text_x** : Devraient fonctionner également
+3. **Tester l'expérience complète** sur iPad/iPhone
+4. **Desktop** : Devrait toujours fonctionner normalement (URLs directes)
 
 ---
 

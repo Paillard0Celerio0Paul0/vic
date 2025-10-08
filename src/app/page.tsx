@@ -197,31 +197,50 @@ export default function Home() {
     
     try {
       console.log("🎵 Chargement audio:", audioId);
-      setDebugMessage("🎵 Chargement " + audioId + "...");
+      setDebugMessage("🎵 Chargement audio...");
       const audioUrl = getBlobUrl(audioId);
       console.log("🎵 URL audio:", audioUrl);
       
-      // Pour Safari/iOS, essayer URL directe (test)
+      // Pour Safari/iOS, utiliser Blob URL avec bon Content-Type (comme pour vidéo)
       if (isSafari || isIOS) {
-        console.log("🍎 Safari/iOS audio - utilisation URL directe");
-        setDebugMessage("🎵 Chargement audio...");
-        audioRef.current.src = audioUrl;
+        console.log("🍎 Safari/iOS audio - utilisation Blob URL");
+        setDebugMessage("📥 Téléchargement audio...");
+        
+        // Fetch et créer Blob avec bon Content-Type
+        const response = await fetch(audioUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        console.log("📦 Audio blob reçu:", blob.size, "bytes, type:", blob.type);
+        
+        // Forcer le bon Content-Type
+        const mimeType = audioId.includes('song') ? 'audio/mpeg' : 'audio/mp4';
+        const audioBlob = new Blob([blob], { type: mimeType });
+        const blobUrl = URL.createObjectURL(audioBlob);
+        console.log("✅ Audio Blob URL créé:", blobUrl);
+        
+        audioRef.current.src = blobUrl;
+        setDebugMessage("⏳ Préparation audio...");
+        audioRef.current.load();
+        
+        setDebugMessage("▶️ Lecture audio...");
+        await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+        console.log("✅ Audio lancé avec succès");
+        setDebugMessage("✅ Audio OK");
+        setTimeout(() => setDebugMessage(""), 2000);
       } else {
         console.log("🎵 URL directe pour desktop");
         audioRef.current.src = audioUrl;
+        audioRef.current.load();
+        await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+        setDebugMessage("");
       }
-      
-      console.log("🔄 Load audio...");
-      audioRef.current.load();
-      console.log("▶️ Play avec retry...");
-      await playWithRetry(audioRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-      console.log("✅ Audio lancé avec succès");
-      setDebugMessage("✅ Audio OK");
-      setTimeout(() => setDebugMessage(""), 2000);
     } catch (error: any) {
       const errorMsg = error.message || error.name || "Unknown";
       console.error("❌ Erreur chargement audio:", error);
-      setDebugMessage("❌ Audio: " + errorMsg);
+      setDebugMessage("❌ Audio: " + errorMsg.substring(0, 30));
       setTimeout(() => setDebugMessage(""), 5000);
     }
   };
@@ -236,28 +255,44 @@ export default function Home() {
     
     try {
       console.log("📺 Chargement vidéo explicative:", videoId);
-      setDebugMessage("📺 Text " + videoId.replace("text_", "") + "...");
+      setDebugMessage("📺 Chargement text...");
       const videoUrl = getOptimizedVideoUrlNoRange(videoId);
       console.log("📺 URL:", videoUrl);
       
-      // Pour Safari/iOS, essayer URL directe (test)
+      // Pour Safari/iOS, utiliser Blob URL (comme pour les autres vidéos)
       if (isSafari || isIOS) {
-        console.log("🍎 Safari/iOS vidéo explicative - utilisation URL directe");
-        explanatoryVideoRef.current.src = videoUrl;
+        console.log("🍎 Safari/iOS vidéo explicative - utilisation Blob URL");
+        
+        // Fetch et créer Blob avec bon Content-Type
+        const response = await fetch(videoUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        console.log("📦 Text blob reçu:", blob.size, "bytes");
+        
+        const videoBlob = new Blob([blob], { type: 'video/mp4' });
+        const blobUrl = URL.createObjectURL(videoBlob);
+        console.log("✅ Text Blob URL créé:", blobUrl);
+        
+        explanatoryVideoRef.current.src = blobUrl;
+        explanatoryVideoRef.current.load();
+        await playWithRetry(explanatoryVideoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+        console.log("✅ Vidéo explicative lancée");
+        setDebugMessage("✅ Text OK");
+        setTimeout(() => setDebugMessage(""), 2000);
       } else {
         console.log("📺 URL directe pour desktop");
         explanatoryVideoRef.current.src = videoUrl;
+        explanatoryVideoRef.current.load();
+        await playWithRetry(explanatoryVideoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
+        setDebugMessage("");
       }
-      
-      explanatoryVideoRef.current.load();
-      await playWithRetry(explanatoryVideoRef.current, { maxAttempts: 5, baseDelayMs: 300 });
-      console.log("✅ Vidéo explicative lancée");
-      setDebugMessage("✅ Text OK");
-      setTimeout(() => setDebugMessage(""), 2000);
     } catch (error: any) {
       const errorMsg = error.message || error.name || "Unknown";
       console.error("❌ Erreur vidéo explicative:", error);
-      setDebugMessage("❌ Text error: " + errorMsg);
+      setDebugMessage("❌ Text: " + errorMsg.substring(0, 30));
       setTimeout(() => setDebugMessage(""), 5000);
     }
   };
