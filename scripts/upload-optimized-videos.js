@@ -33,6 +33,7 @@ async function uploadOptimizedVideo(fileName) {
     const { url } = await put(fileName, fileBuffer, {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN,
+      contentType: 'video/mp4', // IMPORTANT pour Safari
     });
     
     console.log(`✅ ${fileName} uploadé: ${(fileBuffer.length/1024/1024).toFixed(1)}MB`);

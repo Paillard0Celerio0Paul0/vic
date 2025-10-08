@@ -741,8 +741,11 @@ export default function Home() {
             debugLog('📄 Type: ' + contentType);
             
             const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            debugLog('✅ Blob URL créé: ' + blobUrl.substring(0, 40) + '...');
+            
+            // IMPORTANT: Créer un nouveau Blob avec le bon Content-Type pour Safari
+            const videoBlob = new Blob([blob], { type: 'video/mp4' });
+            const blobUrl = URL.createObjectURL(videoBlob);
+            debugLog('✅ Blob URL créé avec type video/mp4');
             
             videoRef.current.muted = true;
             videoRef.current.src = blobUrl;
