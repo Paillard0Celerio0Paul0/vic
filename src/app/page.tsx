@@ -26,7 +26,7 @@ export default function Home() {
   const [explanatoryVideo, setExplanatoryVideo] = useState<string | null>(null);
   const [showExplanatoryVideo, setShowExplanatoryVideo] = useState(false);
   const explanatoryVideoRef = useRef<HTMLVideoElement>(null);
-  const [score, setScore] = useState(9);
+  const [score, setScore] = useState(0);
   const [validatedObjects, setValidatedObjects] = useState<Set<string>>(new Set());
   const [showScore, setShowScore] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
@@ -1412,8 +1412,8 @@ export default function Home() {
               />
             )}
 
-            {/* Message de debug (Safari/iOS uniquement) */}
-            {debugMessage && (isSafari || isIOS) && (
+            {/* Message de debug désactivé - Garder le code pour debugging futur si nécessaire */}
+            {/* {debugMessage && (isSafari || isIOS) && (
               <div 
                 className="fixed top-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg z-50 font-mono text-sm max-w-[90vw] text-center"
                 style={{
@@ -1429,7 +1429,7 @@ export default function Home() {
               >
                 {debugMessage}
               </div>
-            )}
+            )} */}
 
             {/* Bouton fallback Activer le son pendant le jeu */}
 

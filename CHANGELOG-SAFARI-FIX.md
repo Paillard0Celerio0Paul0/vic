@@ -902,6 +902,36 @@ const [introductionUrl] = useState("...com/introduction");  // Pas de .mp4 !
 
 ---
 
+## 🧹 Nettoyage final (Session 17)
+
+### Modifications de production
+
+1. ✅ **Messages de debug désactivés** (commentés dans le JSX)
+   - Les `setDebugMessage()` restent dans le code pour debugging futur
+   - Les `console.log()` restent actifs
+   - L'affichage en haut de l'écran est masqué
+
+2. ✅ **Score initial remis à 0**
+   ```typescript
+   const [score, setScore] = useState(0);  // Au lieu de 9
+   ```
+
+### État de production
+
+**Desktop** :
+- ✅ Toutes les vidéos fonctionnent
+- ✅ URLs directes (performant)
+- ✅ Pas de messages de debug visibles
+
+**Safari/iOS (iPad + iPhone)** :
+- ✅ Toutes les vidéos fonctionnent
+- ✅ Blob URL avec Content-Type forcé
+- ✅ main_song préchargé (instantané à 40s)
+- ✅ Pas de messages de debug visibles
+- ✅ Expérience fluide
+
+---
+
 ## 🎯 Mission accomplie !
 
 Après 14 sessions de debugging, **l'application fonctionne maintenant sur Safari/iOS** ! 🎉
