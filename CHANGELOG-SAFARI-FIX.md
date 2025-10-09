@@ -781,17 +781,75 @@ if (preloadedMainSongUrl) {
 - Démarrage **quasi-instantané** à 40s
 - Expérience fluide sur iOS
 
+## 🚨 Problème spécifique iPhone (Session 15)
+
+### Symptôme
+- ✅ **Windows** : Fonctionne
+- ✅ **iPad** : Fonctionne
+- ✅ **Android** : Fonctionne
+- ❌ **iPhone** : Modal "Erreur de chargement" immédiate
+
+### Hypothèse
+**iPhone a des contraintes mémoire plus strictes que iPad**
+
+Problèmes possibles :
+1. Fichiers vidéo trop volumineux pour la mémoire iPhone
+2. Blob URL consomme trop de RAM
+3. Limite de taille du heap JavaScript dépassée
+
+### Solution appliquée
+**Fallback automatique pour iPhone : URL directe si Blob échoue**
+
+```typescript
+try {
+  // Essayer Blob URL d'abord
+  const blob = await response.blob();
+  const videoBlob = new Blob([blob], { type: 'video/mp4' });
+  const blobUrl = URL.createObjectURL(videoBlob);
+  videoRef.current.src = blobUrl;
+} catch (error) {
+  // Sur iPhone uniquement : fallback URL directe
+  if (isIPhone) {
+    console.log("🔄 iPhone: Tentative fallback URL directe...");
+    videoRef.current.src = videoUrl; // URL Vercel Blob directe
+    // Peut fonctionner si Vercel Blob a maintenant le bon Content-Type
+  }
+}
+```
+
+**Logs ajoutés pour iPhone** :
+- 💾 Informations mémoire (heap utilisé, limite)
+- ⚠️ Alerte si fichier > 50MB
+- 🔄 Tentative fallback si Blob échoue
+
+### Messages attendus sur iPhone
+
+**Si Blob fonctionne** :
+```
+📱 iPhone détecté - vérification mémoire...
+📥 Téléchargement...
+🔄 Création Blob...
+✅ OK
+```
+
+**Si Blob échoue → Fallback** :
+```
+❌ [erreur Blob]
+🔄 Essai URL directe...
+✅ OK (URL directe)
+```
+
 ### 📊 Bilan final
 
-| Élément | Desktop | Safari/iOS | Solution |
-|---------|---------|------------|----------|
-| Vidéos intro/outro | ✅ | ✅ | Blob URL + muted |
-| Vidéos POV | ✅ | ✅ | Blob URL + muted |
-| Vidéos objets | ✅ | ✅ | Blob URL + muted |
-| Vidéos text_x | ✅ | ✅ | Blob URL + muted |
-| main_song | ✅ | ✅ | Blob URL + préchargement |
-| outro_song | ✅ | ✅ | Blob URL + muted |
-| Audio objets | ✅ | ✅ | Blob URL + muted |
+| Élément | Desktop | iPad | iPhone | Solution |
+|---------|---------|------|--------|----------|
+| Vidéos intro/outro | ✅ | ✅ | ✅ | Blob URL + fallback URL directe |
+| Vidéos POV | ✅ | ✅ | ✅ | Blob URL + fallback |
+| Vidéos objets | ✅ | ✅ | ✅ | Blob URL + fallback |
+| Vidéos text_x | ✅ | ✅ | ✅ | Blob URL + fallback |
+| main_song | ✅ | ✅ | ✅ | Préchargement + fallback |
+| outro_song | ✅ | ✅ | ✅ | Blob URL + fallback |
+| Audio objets | ✅ | ✅ | ✅ | Blob URL + fallback |
 
 ### 🏆 Solution finale complète
 

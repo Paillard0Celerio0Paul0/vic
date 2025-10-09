@@ -51,11 +51,17 @@ export default function Home() {
     (navigator.userAgent.includes('AppleWebKit') && navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome'))
   );
   
-  // Log de détection au montage (optionnel en dev)
+  const isIPhone = typeof navigator !== 'undefined' && /iPhone/.test(navigator.userAgent);
+  
+  // Log de détection au montage
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Détections navigateur:', { isIOS, isSafari, platform: navigator.platform });
-    }
+    console.log('🔍 Détections navigateur:', { 
+      isIOS, 
+      isSafari, 
+      isIPhone,
+      platform: navigator.platform,
+      userAgent: navigator.userAgent.substring(0, 80)
+    });
   }, []);
   
   const [audioUnlocked, setAudioUnlocked] = useState(false);
@@ -100,15 +106,36 @@ export default function Home() {
         videoRef.current.muted = true;
         
         try {
+          // Sur iPhone, vérifier la mémoire disponible
+          if (isIPhone) {
+            console.log("📱 iPhone détecté - vérification mémoire...");
+            const memoryInfo = (performance as any).memory;
+            if (memoryInfo) {
+              console.log("💾 Mémoire:", {
+                usedJS: (memoryInfo.usedJSHeapSize / 1024 / 1024).toFixed(1) + 'MB',
+                totalJS: (memoryInfo.totalJSHeapSize / 1024 / 1024).toFixed(1) + 'MB',
+                limit: (memoryInfo.jsHeapSizeLimit / 1024 / 1024).toFixed(1) + 'MB'
+              });
+            }
+          }
+          
           // Fetch le fichier et créer un Blob avec le BON Content-Type
+          setDebugMessage("📥 Téléchargement...");
           const response = await fetch(videoUrl);
           if (!response.ok) {
+            setDebugMessage(`❌ HTTP ${response.status}`);
             throw new Error(`HTTP ${response.status}`);
           }
           
           setDebugMessage("🔄 Création Blob...");
           const blob = await response.blob();
-          console.log("📦 Blob reçu:", blob.size, "bytes, type:", blob.type);
+          const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+          console.log(`📦 Blob reçu: ${sizeMB}MB, type:`, blob.type);
+          
+          if (isIPhone && blob.size > 50 * 1024 * 1024) {
+            console.warn(`⚠️ Fichier volumineux (${sizeMB}MB) sur iPhone - risque mémoire`);
+            setDebugMessage(`⚠️ Fichier gros: ${sizeMB}MB`);
+          }
           
           // Forcer le bon Content-Type
           const videoBlob = new Blob([blob], { type: 'video/mp4' });
@@ -123,7 +150,7 @@ export default function Home() {
             const timeout = setTimeout(() => {
               setDebugMessage("❌ Timeout Blob");
               reject(new Error("Timeout"));
-            }, 10000);
+            }, 15000); // 15s pour iPhone (réseau peut être plus lent)
             
             const onLoadedMetadata = () => {
               clearTimeout(timeout);
@@ -137,10 +164,11 @@ export default function Home() {
               clearTimeout(timeout);
               const target = e.target as HTMLVideoElement;
               const code = target.error?.code || 0;
-              setDebugMessage(`❌ Erreur code:${code}`);
+              const msg = target.error?.message || 'Unknown';
+              setDebugMessage(`❌ Erreur ${code}: ${msg.substring(0, 20)}`);
               videoRef.current?.removeEventListener('loadedmetadata', onLoadedMetadata);
               videoRef.current?.removeEventListener('error', onError);
-              reject(new Error(`Error ${code}`));
+              reject(new Error(`Error ${code}: ${msg}`));
             };
             
             videoRef.current?.addEventListener('loadedmetadata', onLoadedMetadata);
@@ -168,9 +196,56 @@ export default function Home() {
           }
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
-          setDebugMessage(`❌ ${errMsg.substring(0, 40)}`);
-          console.error("❌ Erreur Safari:", error);
-          throw error;
+          console.error("❌ Erreur Blob URL sur Safari/iOS:", error);
+          
+          // Fallback pour iPhone : essayer URL directe si Blob échoue
+          if (isIPhone) {
+            console.log("🔄 iPhone: Tentative fallback avec URL directe...");
+            setDebugMessage("🔄 Essai URL directe...");
+            
+            try {
+              videoRef.current.src = videoUrl;
+              videoRef.current.load();
+              
+              await new Promise<void>((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error("Timeout URL directe")), 10000);
+                const onLoadedMetadata = () => {
+                  clearTimeout(timeout);
+                  videoRef.current?.removeEventListener('loadedmetadata', onLoadedMetadata);
+                  resolve();
+                };
+                videoRef.current?.addEventListener('loadedmetadata', onLoadedMetadata);
+              });
+              
+              await videoRef.current.play();
+              
+              if (needsSound) {
+                setTimeout(() => {
+                  if (videoRef.current) {
+                    videoRef.current.muted = false;
+                    videoRef.current.volume = 1.0;
+                    setDebugMessage("✅ OK (URL directe)");
+                    setTimeout(() => setDebugMessage(""), 3000);
+                  }
+                }, 200);
+              } else {
+                setDebugMessage("✅ OK (URL directe)");
+                setTimeout(() => setDebugMessage(""), 3000);
+              }
+              
+              console.log("✅ Fallback URL directe réussi");
+              return; // Succès, sortir
+            } catch (fallbackError) {
+              console.error("❌ Fallback URL directe échoué aussi:", fallbackError);
+              setDebugMessage(`❌ ${errMsg.substring(0, 40)}`);
+              setTimeout(() => setDebugMessage(""), 10000);
+              throw error; // Propager l'erreur originale
+            }
+          } else {
+            setDebugMessage(`❌ ${errMsg.substring(0, 40)}`);
+            setTimeout(() => setDebugMessage(""), 10000);
+            throw error;
+          }
         }
       } else {
         // Pour les autres navigateurs
