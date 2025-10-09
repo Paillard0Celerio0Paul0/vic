@@ -33,7 +33,6 @@ export default function Home() {
   const [outroPlayed, setOutroPlayed] = useState(false);
   const [generiquePlayed, setGeneriquePlayed] = useState(false);
   const [mainMusicPosition, setMainMusicPosition] = useState(0);
-  const [introductionUrl] = useState("https://ntpqkpm4vpvltypf.public.blob.vercel-storage.com/introduction");
   const [showArrows, setShowArrows] = useState(false);
   const [debugMessage, setDebugMessage] = useState("");
 
@@ -78,9 +77,7 @@ export default function Home() {
       let videoUrl: string;
       
       // Obtenir l'URL correcte selon le type de vidéo
-      if (videoId === "introduction") {
-        videoUrl = introductionUrl;
-      } else if (videoId === "outro" || videoId === "generique") {
+      if (videoId === "introduction" || videoId === "outro" || videoId === "generique") {
         videoUrl = getBlobUrl(videoId);
       } else {
         videoUrl = getOptimizedVideoUrlWithRange(videoId);
@@ -120,28 +117,37 @@ export default function Home() {
           }
           
           // Fetch le fichier et créer un Blob avec le BON Content-Type
+          console.log(`🔄 Début fetch de ${videoId} depuis:`, videoUrl);
           setDebugMessage("📥 Téléchargement...");
+          
           const response = await fetch(videoUrl);
+          console.log(`📡 Réponse fetch reçue - Status: ${response.status}`);
+          
           if (!response.ok) {
             setDebugMessage(`❌ HTTP ${response.status}`);
             throw new Error(`HTTP ${response.status}`);
           }
           
           setDebugMessage("🔄 Création Blob...");
+          console.log("🔄 Conversion en blob...");
           const blob = await response.blob();
           const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
           console.log(`📦 Blob reçu: ${sizeMB}MB, type:`, blob.type);
+          setDebugMessage(`📦 ${sizeMB}MB reçu`);
           
           if (isIPhone && blob.size > 50 * 1024 * 1024) {
             console.warn(`⚠️ Fichier volumineux (${sizeMB}MB) sur iPhone - risque mémoire`);
-            setDebugMessage(`⚠️ Fichier gros: ${sizeMB}MB`);
+            setDebugMessage(`⚠️ Gros: ${sizeMB}MB`);
           }
           
           // Forcer le bon Content-Type
+          console.log("🔨 Création Blob avec type forcé...");
           const videoBlob = new Blob([blob], { type: 'video/mp4' });
+          console.log("🔗 Création ObjectURL...");
           const blobUrl = URL.createObjectURL(videoBlob);
           console.log("✅ Blob URL créé:", blobUrl);
           
+          setDebugMessage("📺 Assignation src...");
           videoRef.current.src = blobUrl;
           setDebugMessage("⏳ Chargement...");
           
@@ -197,55 +203,10 @@ export default function Home() {
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
           console.error("❌ Erreur Blob URL sur Safari/iOS:", error);
-          
-          // Fallback pour iPhone : essayer URL directe si Blob échoue
-          if (isIPhone) {
-            console.log("🔄 iPhone: Tentative fallback avec URL directe...");
-            setDebugMessage("🔄 Essai URL directe...");
-            
-            try {
-              videoRef.current.src = videoUrl;
-              videoRef.current.load();
-              
-              await new Promise<void>((resolve, reject) => {
-                const timeout = setTimeout(() => reject(new Error("Timeout URL directe")), 10000);
-                const onLoadedMetadata = () => {
-                  clearTimeout(timeout);
-                  videoRef.current?.removeEventListener('loadedmetadata', onLoadedMetadata);
-                  resolve();
-                };
-                videoRef.current?.addEventListener('loadedmetadata', onLoadedMetadata);
-              });
-              
-              await videoRef.current.play();
-              
-              if (needsSound) {
-                setTimeout(() => {
-                  if (videoRef.current) {
-                    videoRef.current.muted = false;
-                    videoRef.current.volume = 1.0;
-                    setDebugMessage("✅ OK (URL directe)");
-                    setTimeout(() => setDebugMessage(""), 3000);
-                  }
-                }, 200);
-              } else {
-                setDebugMessage("✅ OK (URL directe)");
-                setTimeout(() => setDebugMessage(""), 3000);
-              }
-              
-              console.log("✅ Fallback URL directe réussi");
-              return; // Succès, sortir
-            } catch (fallbackError) {
-              console.error("❌ Fallback URL directe échoué aussi:", fallbackError);
-              setDebugMessage(`❌ ${errMsg.substring(0, 40)}`);
-              setTimeout(() => setDebugMessage(""), 10000);
-              throw error; // Propager l'erreur originale
-            }
-          } else {
-            setDebugMessage(`❌ ${errMsg.substring(0, 40)}`);
-            setTimeout(() => setDebugMessage(""), 10000);
-            throw error;
-          }
+          console.log("Détails erreur:", { videoId, videoUrl, errMsg, isIPhone });
+          setDebugMessage(`❌ ${errMsg.substring(0, 40)}`);
+          setTimeout(() => setDebugMessage(""), 10000);
+          throw error;
         }
       } else {
         // Pour les autres navigateurs
@@ -994,9 +955,6 @@ export default function Home() {
     
     const text = "Chargement...";
     let currentIndex = 0;
-    
-    // Test de l'URL de la vidéo d'introduction (éviter le log multiple)
-    const introUrl = introductionUrl;
     
     const typeInterval = setInterval(() => {
       if (currentIndex <= text.length) {

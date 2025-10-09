@@ -851,13 +851,51 @@ try {
 | outro_song | ✅ | ✅ | ✅ | Blob URL + fallback |
 | Audio objets | ✅ | ✅ | ✅ | Blob URL + fallback |
 
+## 🔧 Correction URL introduction (Session 16)
+
+### Problème identifié - iPhone uniquement
+Modal "Erreur de chargement" immédiate sur iPhone
+
+**Cause racine** : URL hardcodée SANS extension
+```typescript
+// AVANT (ligne 36) - MAUVAIS
+const [introductionUrl] = useState("...com/introduction");  // Pas de .mp4 !
+
+// Dans blob-urls.json - BON
+"introduction": "...com/introduction.mp4"  // Avec .mp4
+```
+
+**Résultat** : iPhone essayait de charger l'ancienne URL sans .mp4 (mauvais Content-Type) → échec
+
+### Solution appliquée
+1. ✅ **Suppression** de l'URL hardcodée
+2. ✅ **Utilisation** de `getBlobUrl("introduction")` (retourne l'URL avec .mp4)
+3. ✅ **Logs ultra-détaillés** pour diagnostiquer chaque étape sur iPhone
+
+**Nouveaux logs sur iPhone** :
+```
+🔄 Début fetch de introduction depuis: [URL]
+📡 Réponse fetch reçue - Status: 200
+🔄 Conversion en blob...
+📦 Blob reçu: 15.3MB, type: video/mp4
+🔨 Création Blob avec type forcé...
+🔗 Création ObjectURL...
+✅ Blob URL créé
+📺 Assignation src...
+⏳ Chargement...
+✅ Prêt
+▶️ Lecture...
+✅ OK
+```
+
 ### 🏆 Solution finale complète
 
-**Pour Safari/iOS** :
+**Pour Safari/iOS (iPad + iPhone)** :
 1. Blob URL avec Content-Type forcé (`video/mp4`, `audio/mpeg`)
 2. Toujours démarrer en `muted=true`
 3. Unmute après play réussi
 4. Précharger main_song pendant l'intro
+5. **Utiliser les URLs du blob-urls.json** (avec extensions)
 
 **Pour Desktop** :
 - URLs directes (pas de changement)
